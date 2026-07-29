@@ -20,7 +20,7 @@ const SERVICES = [
 
 export default function SocialMedia() {
   const [meta, setMeta] = useState({ isSample: false, boothList: [], existingRequests: {} });
-  const [service, setService] = useState(null); // active service key
+  const [service, setService] = useState(null); // active service key for popup modal
   const [form, setForm] = useState({ all_voters: false, booth: '', section_no: '', language: 'English', message: '' });
   const [sections, setSections] = useState([]);
   const [fileName, setFileName] = useState('');
@@ -115,8 +115,8 @@ export default function SocialMedia() {
   return (
     <div style={{ maxWidth: 840, margin: '0 auto' }}>
       <div style={{ marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 26 }}>Social Media Broadcasts</h1>
-        <p className="muted" style={{ margin: '4px 0 0', fontSize: 14 }}>
+        <h1 style={{ margin: 0, fontSize: 24 }}>Social Media Broadcasts</h1>
+        <p className="muted" style={{ margin: '4px 0 0', fontSize: 13.5 }}>
           Select a service to send targeted SMS, Audio, or WhatsApp messages to voters in your ward.
         </p>
       </div>
@@ -145,7 +145,7 @@ export default function SocialMedia() {
                 transition: 'all 0.2s ease-in-out',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'space-between',
+                justify: 'space-between',
                 position: 'relative',
               }}
             >
@@ -182,184 +182,208 @@ export default function SocialMedia() {
         })}
       </div>
 
-      {/* Active Form Card */}
+      {/* Request Form Popup Modal */}
       {service && cfg && (
-        <div className="card" style={{ borderRadius: 18, border: '1px solid #e2e8f0', padding: 28, boxShadow: '0 6px 24px rgba(0,0,0,0.06)' }}>
-          {/* Header Bar */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid #f1f5f9' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: cfg.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <cfg.icon size={20} color={cfg.color} />
+        <div className="modal-overlay" onClick={() => setService(null)} style={{ padding: 10 }}>
+          <div
+            className="modal-box sm-modal-box"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 640,
+              width: '100%',
+              maxHeight: '92vh',
+              overflowY: 'auto',
+              borderRadius: 18,
+              padding: '18px 16px',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+            }}
+          >
+            {/* Header Bar with Service Icon, Title and Close Button */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justify: 'space-between',
+                marginBottom: 14,
+                paddingBottom: 10,
+                borderBottom: '1px solid #e2e8f0',
+                gap: 8,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: cfg.bg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <cfg.icon size={20} color={cfg.color} />
+                </div>
+                <h2 style={{ margin: 0, fontSize: 17, color: cfg.color, fontWeight: 700, lineHeight: 1.2 }}>
+                  Create {cfg.title} Request
+                </h2>
               </div>
-              <h2 style={{ margin: 0, fontSize: 19, color: cfg.color }}>Create {cfg.title} Request</h2>
+              <button className="modal-close" onClick={() => setService(null)} style={{ fontSize: 24, cursor: 'pointer', padding: '0 4px' }}>×</button>
             </div>
-            <button className="secondary" onClick={() => setService(null)} style={{ borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 600 }}>
-              ← Change Service
-            </button>
-          </div>
 
-          {/* Filter Audience Box */}
-          <div style={{ background: '#f8fafc', borderRadius: 14, padding: 18, border: '1px solid #e2e8f0', marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>Filter Target Audience</div>
-                <div className="muted" style={{ fontSize: 12.5 }}>Select a polling booth and section, or send to all voters</div>
+            {/* Filter Audience Box */}
+            <div className="sm-audience-box" style={{ background: '#f8fafc', borderRadius: 12, padding: 14, border: '1px solid #e2e8f0', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a' }}>Filter Target Audience</div>
+                  <div className="muted" style={{ fontSize: 11.5 }}>Select polling booth &amp; section, or send to all</div>
+                </div>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: form.all_voters ? '#e0f2fe' : '#fff', border: form.all_voters ? '1.5px solid #0284c7' : '1px solid #cbd5e1', padding: '6px 12px', borderRadius: 16, color: form.all_voters ? '#0369a1' : '#334155', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  <input type="checkbox" checked={form.all_voters} onChange={(e) => setForm({ ...form, all_voters: e.target.checked, booth: '', section_no: '' })} style={{ width: 15, height: 15, accentColor: '#0284c7' }} />
+                  <span>All Voters</span>
+                </label>
               </div>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: form.all_voters ? '#e0f2fe' : '#fff', border: form.all_voters ? '1.5px solid #0284c7' : '1px solid #cbd5e1', padding: '8px 18px', borderRadius: 20, color: form.all_voters ? '#0369a1' : '#334155', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                <input type="checkbox" checked={form.all_voters} onChange={(e) => setForm({ ...form, all_voters: e.target.checked, booth: '', section_no: '' })} style={{ accentColor: '#0284c7' }} />
-                <span>All Voters</span>
-              </label>
+
+              {!form.all_voters && (
+                <div className="sm-booth-grid">
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: '#475569' }}>Select Booth *</label>
+                    <select value={form.booth} onChange={(e) => onBoothChange(e.target.value)} style={{ borderRadius: 8, padding: '8px 10px', border: '1px solid #cbd5e1', width: '100%', background: '#fff', fontSize: 13 }}>
+                      <option value="">Choose Booth</option>
+                      {meta.boothList.map((b) => <option key={`${b.assembly_no}_${b.part_no}`} value={`${b.assembly_no}_${b.part_no}`}>{b.booth_name} (Part {b.part_no})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: '#475569' }}>Select Section (Optional)</label>
+                    <select value={form.section_no} onChange={(e) => setForm({ ...form, section_no: e.target.value })} style={{ borderRadius: 8, padding: '8px 10px', border: '1px solid #cbd5e1', width: '100%', background: '#fff', fontSize: 13 }}>
+                      <option value="">All Sections</option>
+                      {sections.map((s) => <option key={s} value={s}>Section {s}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {!form.all_voters && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginTop: 12 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: '#475569' }}>Select Booth *</label>
-                  <select value={form.booth} onChange={(e) => onBoothChange(e.target.value)} style={{ borderRadius: 10, padding: '10px 14px', border: '1px solid #cbd5e1', width: '100%', background: '#fff' }}>
-                    <option value="">Choose Booth</option>
-                    {meta.boothList.map((b) => <option key={`${b.assembly_no}_${b.part_no}`} value={`${b.assembly_no}_${b.part_no}`}>{b.booth_name} (Part {b.part_no})</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: '#475569' }}>Select Section (Optional)</label>
-                  <select value={form.section_no} onChange={(e) => setForm({ ...form, section_no: e.target.value })} style={{ borderRadius: 10, padding: '10px 14px', border: '1px solid #cbd5e1', width: '100%', background: '#fff' }}>
-                    <option value="">All Sections</option>
-                    {sections.map((s) => <option key={s} value={s}>Section {s}</option>)}
-                  </select>
-                </div>
-              </div>
-            )}
-          </div>
+            {/* Form Fields */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {service === 'sms' && (
+                <>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: '#475569' }}>Select Language *</label>
+                    <select value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })} style={{ borderRadius: 8, padding: '8px 10px', border: '1px solid #cbd5e1', width: '100%', background: '#fff', fontSize: 13 }}>
+                      <option>English</option><option>Tamil</option><option>Kannada</option><option>Malayalam</option>
+                    </select>
+                  </div>
 
-          {/* Form Specific Inputs */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            {service === 'sms' && (
-              <>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: '#475569' }}>Select Language *</label>
-                  <select value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })} style={{ borderRadius: 10, padding: '10px 14px', border: '1px solid #cbd5e1', width: '100%', background: '#fff' }}>
-                    <option>English</option><option>Tamil</option><option>Kannada</option><option>Malayalam</option>
-                  </select>
-                </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: '#475569' }}>Photo Attachment (Optional)</label>
+                    {previewUrl ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 10 }}>
+                        <img src={previewUrl} alt="Preview" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 12.5, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fileName}</div>
+                          <div className="muted" style={{ fontSize: 11, color: '#2563eb', fontWeight: 600 }}>Image Selected</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                          <label style={{ cursor: 'pointer', background: '#e2e8f0', color: '#334155', borderRadius: 14, padding: '5px 10px', fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            Change
+                            <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+                          </label>
+                          <button type="button" onClick={removeFile} style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: 14, padding: '5px 10px', fontSize: 11.5, fontWeight: 600 }}>
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <input type="file" accept="image/*" onChange={handleFileChange} style={{ borderRadius: 8, padding: '8px 10px', border: '1px solid #cbd5e1', width: '100%', background: '#fff', fontSize: 12.5 }} />
+                    )}
+                  </div>
 
-                {/* Photo Attachment on its own new line */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>SMS Message Content * (max 70 chars)</label>
+                      <span style={{ fontSize: 11.5, color: msgLen > 70 ? '#ef4444' : '#64748b', fontWeight: 700 }}>{msgLen} / 70</span>
+                    </div>
+                    <textarea rows={3} maxLength={70} style={{ width: '100%', borderRadius: 8, padding: 10, border: '1px solid #cbd5e1', fontFamily: 'inherit', resize: 'vertical', fontSize: 13 }} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="Type your SMS broadcast message here..." />
+                  </div>
+                </>
+              )}
+
+              {service === 'voice' && (
                 <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: '#475569' }}>Photo Attachment (Optional)</label>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: '#475569' }}>Upload Audio File * (MP3 only)</label>
                   {previewUrl ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: 14 }}>
-                      <img src={previewUrl} alt="Preview" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 10, border: '1px solid #cbd5e1', background: '#fff' }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{fileName}</div>
-                        <div className="muted" style={{ fontSize: 12.5, color: '#2563eb', fontWeight: 600 }}>Image Selected</div>
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 12.5, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🎵 {fileName}</div>
+                          <div className="muted" style={{ fontSize: 11, color: '#2563eb', fontWeight: 600 }}>Audio Ready</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                          <label style={{ cursor: 'pointer', background: '#e2e8f0', color: '#334155', borderRadius: 14, padding: '5px 10px', fontSize: 11.5, fontWeight: 600 }}>
+                            Change
+                            <input type="file" accept="audio/mp3,audio/mpeg" onChange={handleFileChange} style={{ display: 'none' }} />
+                          </label>
+                          <button type="button" onClick={removeFile} style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: 14, padding: '5px 10px', fontSize: 11.5, fontWeight: 600 }}>
+                            Delete
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <label style={{ cursor: 'pointer', background: '#e2e8f0', color: '#334155', borderRadius: 18, padding: '7px 16px', fontSize: 12.5, fontWeight: 600 }}>
-                          Change Photo
-                          <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
-                        </label>
-                        <button type="button" onClick={removeFile} style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: 18, padding: '7px 16px', fontSize: 12.5, fontWeight: 600 }}>
-                          Delete
-                        </button>
-                      </div>
+                      <audio controls src={previewUrl} style={{ width: '100%', height: 36, borderRadius: 6 }} />
                     </div>
                   ) : (
-                    <input type="file" accept="image/*" onChange={handleFileChange} style={{ borderRadius: 10, padding: '10px 14px', border: '1px solid #cbd5e1', width: '100%', background: '#fff' }} />
+                    <input type="file" accept="audio/mp3,audio/mpeg" onChange={handleFileChange} style={{ borderRadius: 8, padding: '8px 10px', border: '1px solid #cbd5e1', width: '100%', background: '#fff', fontSize: 12.5 }} />
                   )}
                 </div>
+              )}
 
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>SMS Message Content * (max 70 characters)</label>
-                    <span style={{ fontSize: 12, color: msgLen > 70 ? '#ef4444' : '#64748b', fontWeight: 600 }}>{msgLen} / 70</span>
+              {service === 'whatsapp' && (
+                <>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: '#475569' }}>WhatsApp Header Image *</label>
+                    {previewUrl ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 10 }}>
+                        <img src={previewUrl} alt="WhatsApp Header Preview" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 12.5, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fileName}</div>
+                          <div className="muted" style={{ fontSize: 11, color: '#2563eb', fontWeight: 600 }}>Header Image Selected</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                          <label style={{ cursor: 'pointer', background: '#e2e8f0', color: '#334155', borderRadius: 14, padding: '5px 10px', fontSize: 11.5, fontWeight: 600 }}>
+                            Change
+                            <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+                          </label>
+                          <button type="button" onClick={removeFile} style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: 14, padding: '5px 10px', fontSize: 11.5, fontWeight: 600 }}>
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <input type="file" accept="image/*" onChange={handleFileChange} style={{ borderRadius: 8, padding: '8px 10px', border: '1px solid #cbd5e1', width: '100%', background: '#fff', fontSize: 12.5 }} />
+                    )}
                   </div>
-                  <textarea rows={4} maxLength={70} style={{ width: '100%', borderRadius: 12, padding: 12, border: '1px solid #cbd5e1', fontFamily: 'inherit', resize: 'vertical' }} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="Type your SMS broadcast message here..." />
-                </div>
-              </>
-            )}
 
-            {service === 'voice' && (
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: '#475569' }}>Upload Audio File * (MP3 only)</label>
-                {previewUrl ? (
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: 16 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>🎵 {fileName}</div>
-                        <div className="muted" style={{ fontSize: 12.5, color: '#2563eb', fontWeight: 600 }}>Audio File Ready for Preview</div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <label style={{ cursor: 'pointer', background: '#e2e8f0', color: '#334155', borderRadius: 18, padding: '7px 16px', fontSize: 12.5, fontWeight: 600 }}>
-                          Change Audio
-                          <input type="file" accept="audio/mp3,audio/mpeg" onChange={handleFileChange} style={{ display: 'none' }} />
-                        </label>
-                        <button type="button" onClick={removeFile} style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: 18, padding: '7px 16px', fontSize: 12.5, fontWeight: 600 }}>
-                          Delete
-                        </button>
-                      </div>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>WhatsApp Message Content * (max 100 chars)</label>
+                      <span style={{ fontSize: 11.5, color: msgLen > 100 ? '#ef4444' : '#64748b', fontWeight: 700 }}>{msgLen} / 100</span>
                     </div>
-                    {/* Interactive Audio Player with Play button */}
-                    <audio controls src={previewUrl} style={{ width: '100%', height: 40, borderRadius: 10 }} />
+                    <textarea rows={3} maxLength={100} style={{ width: '100%', borderRadius: 8, padding: 10, border: '1px solid #cbd5e1', fontFamily: 'inherit', resize: 'vertical', fontSize: 13 }} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="Type your WhatsApp broadcast message here..." />
                   </div>
-                ) : (
-                  <input type="file" accept="audio/mp3,audio/mpeg" onChange={handleFileChange} style={{ borderRadius: 10, padding: '10px 14px', border: '1px solid #cbd5e1', width: '100%', background: '#fff' }} />
-                )}
+                </>
+              )}
+
+              {/* Submit Action */}
+              <div style={{ marginTop: 10 }}>
+                <button
+                  onClick={submit}
+                  disabled={!valid || submitting}
+                  className="sm-submit-btn"
+                  style={{
+                    borderRadius: 12,
+                    padding: '12px 24px',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    background: valid ? cfg.color : '#cbd5e1',
+                    borderColor: valid ? cfg.color : '#cbd5e1',
+                    boxShadow: valid ? `0 4px 14px ${cfg.color}44` : 'none',
+                    cursor: valid ? 'pointer' : 'not-allowed',
+                    width: '100%',
+                  }}
+                >
+                  {submitting ? 'Submitting…' : 'Submit Request'}
+                </button>
               </div>
-            )}
-
-            {service === 'whatsapp' && (
-              <>
-                <div>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: '#475569' }}>WhatsApp Header Image *</label>
-                  {previewUrl ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: 14 }}>
-                      <img src={previewUrl} alt="WhatsApp Header Preview" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 10, border: '1px solid #cbd5e1', background: '#fff' }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{fileName}</div>
-                        <div className="muted" style={{ fontSize: 12.5, color: '#2563eb', fontWeight: 600 }}>Header Image Selected</div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <label style={{ cursor: 'pointer', background: '#e2e8f0', color: '#334155', borderRadius: 18, padding: '7px 16px', fontSize: 12.5, fontWeight: 600 }}>
-                          Change Image
-                          <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
-                        </label>
-                        <button type="button" onClick={removeFile} style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: 18, padding: '7px 16px', fontSize: 12.5, fontWeight: 600 }}>
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <input type="file" accept="image/*" onChange={handleFileChange} style={{ borderRadius: 10, padding: '10px 14px', border: '1px solid #cbd5e1', width: '100%', background: '#fff' }} />
-                  )}
-                </div>
-
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: '#475569' }}>WhatsApp Message Content * (max 100 characters)</label>
-                    <span style={{ fontSize: 12, color: msgLen > 100 ? '#ef4444' : '#64748b', fontWeight: 600 }}>{msgLen} / 100</span>
-                  </div>
-                  <textarea rows={4} maxLength={100} style={{ width: '100%', borderRadius: 12, padding: 12, border: '1px solid #cbd5e1', fontFamily: 'inherit', resize: 'vertical' }} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="Type your WhatsApp broadcast message here..." />
-                </div>
-              </>
-            )}
-
-            {/* Submit Action */}
-            <div style={{ textAlign: 'right', marginTop: 12 }}>
-              <button
-                onClick={submit}
-                disabled={!valid || submitting}
-                style={{
-                  borderRadius: 24,
-                  padding: '12px 32px',
-                  fontSize: 15,
-                  fontWeight: 700,
-                  background: valid ? cfg.color : '#cbd5e1',
-                  borderColor: valid ? cfg.color : '#cbd5e1',
-                  boxShadow: valid ? `0 4px 14px ${cfg.color}44` : 'none',
-                  cursor: valid ? 'pointer' : 'not-allowed',
-                }}
-              >
-                {submitting ? 'Submitting…' : 'Submit Request'}
-              </button>
             </div>
           </div>
         </div>

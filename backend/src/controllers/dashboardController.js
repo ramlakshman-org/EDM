@@ -1,11 +1,10 @@
 import { getAppDb, isVoterDbOnline } from '../config/db.js';
-import { searchEpic as searchEpicModel, genderCountsForParts } from '../models/voterModel.js';
+import { searchEpicGlobal, genderCountsForParts } from '../models/voterModel.js';
 import { getAssembly, listAssemblies, assemblyGenderCounts } from '../models/assemblyModel.js';
 import { countsByGroup, countChildren, findById, wardLogins } from '../models/userModel.js';
 import { ROLES, ROLE_NAME } from '../constants/roles.js';
 
 // Mirrors DashboardController@index voter-stat tiles: sum stored per-assembly
-// counts from tbl_assembly_consitituency. Resilient to a voter-DB outage (UX-03).
 export async function stats(req, res) {
   try {
     const db = getAppDb();
@@ -32,7 +31,7 @@ export async function stats(req, res) {
   }
 }
 
-// Role-scoped dashboard — mirrors the per-role dashboards (super/mp/mla/booth/ward/king/dsa/tele).
+// Role-scoped dashboard
 export async function roleDashboard(req, res) {
   const u = req.user || {};
   const groupId = Number(u.group_id || 0);
@@ -103,22 +102,28 @@ export async function roleDashboard(req, res) {
   }
 }
 
-// Mirrors DashboardController@searchEpic — try/catch so a DB outage is graceful (UX-06).
+// Search EPIC across all assembly collections in voter_db
 export async function searchEpic(req, res) {
-  const epic = (req.query.epic || '').trim();
+  const epic = (req.query.epic || req.query.epicNo || '').trim();
+  const assemblyId = req.query.assemblyId || req.query.assembly_no || null;
   if (!epic) return res.json({ success: false, message: 'EPIC number is required.' });
+
   try {
-    const result = await searchEpicModel(epic);
+    const t0 = Date.now();
+    const result = await searchEpicGlobal(epic, assemblyId);
+    const elapsed_ms = Date.now() - t0;
+
     if (result?.voter) {
-      let assembly_name = 'Unknown';
+      let assembly_name = `Assembly ${result.voter.ASSEMBLY_NO || result.assembly_no}`;
       try {
-        const a = await getAssembly(result.voter.ASSEMBLY_NO);
+        const a = await getAssembly(result.voter.ASSEMBLY_NO || result.assembly_no);
         if (a?.assembly_name) assembly_name = a.assembly_name;
       } catch { /* ignore */ }
-      return res.json({ success: true, voter: result.voter, assembly_name, elapsed_ms: result.elapsed_ms });
+      return res.json({ success: true, voter: result.voter, assembly_name, elapsed_ms });
     }
-    return res.json({ success: false, elapsed_ms: result?.elapsed_ms ?? 0, message: 'Voter not found.' });
+
+    return res.json({ success: false, elapsed_ms, message: `Voter not found with EPIC number: ${epic}` });
   } catch (e) {
-    return res.json({ success: false, message: 'Voter database is currently unavailable. Please try again later.' });
+    return res.json({ success: false, message: 'Voter database error or unavailable.' });
   }
 }

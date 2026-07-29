@@ -2,16 +2,32 @@ import { getVoterDb, getAppDb, isAppDbOnline } from '../config/db.js';
 import { findById, findWardMainAdmin } from '../models/userModel.js';
 import { getAssembly } from '../models/assemblyModel.js';
 import { collectionForAc } from '../models/voterModel.js';
-import { ROLES } from '../constants/roles.js';
 
 // A per-mobile ward user login inherits its booths from the main-admin combination.
 async function effectiveBooths(rec) {
   if (!rec) return [];
+  if (Array.isArray(rec.booths) && rec.booths.length > 0) {
+    return rec.booths;
+  }
   if (rec.is_user_login) {
     try {
       const main = await findWardMainAdmin({ district_id: rec.district_id, category_name: rec.category_name, ward_id: rec.ward_id, candidate_type: rec.candidate_type, position: rec.position });
-      return Array.isArray(main?.booths) ? main.booths : [];
-    } catch { return []; }
+      if (Array.isArray(main?.booths) && main.booths.length > 0) {
+        return main.booths;
+      }
+    } catch { /* ignore */ }
+  }
+  if (rec.mobile_no) {
+    try {
+      const db = getAppDb();
+      const mob = String(rec.mobile_no).replace(/\D/g, '');
+      if (mob) {
+        const enq = await db.collection('tbl_enquiry').findOne({ mobile: mob });
+        if (enq && Array.isArray(enq.booths) && enq.booths.length > 0) {
+          return enq.booths;
+        }
+      }
+    } catch { /* ignore */ }
   }
   return Array.isArray(rec.booths) ? rec.booths : [];
 }
@@ -19,7 +35,6 @@ async function effectiveBooths(rec) {
 const SAMPLE_BOOTHS = 47;
 const SAMPLE_VOTERS = 705;
 
-// Resolve the ward user's own record (or, for a super admin previewing, none).
 async function wardRecord(req) {
   const u = req.user || {};
   if (u.sub && u.sub !== 'admin') { try { return await findById(u.sub); } catch { /* offline */ } }
@@ -35,11 +50,12 @@ function account(rec, u) {
     local_body: rec?.category_name || '-',
     ward_number: rec?.ward_id ?? '-',
     username: rec?.mobile_no || '-',
+    paid_status: rec?.paid_status || 'No',
+    transaction_id: rec?.transaction_id || null,
   };
 }
 
-// GET /ward/home — sample/preview mode when no booths assigned, else the
-// assigned-booth list (mirrors admin/pages/wardlogins/dashboard).
+// GET /ward/home — support multi-assembly booth list and voter counts
 export async function home(req, res) {
   const u = req.user || {};
   const rec = await wardRecord(req);
@@ -53,27 +69,75 @@ export async function home(req, res) {
     });
   }
 
-  // Assigned mode — per-booth voter counts from the assembly's voter roll.
-  const assemblyNo = rec?.assembly_id;
-  let assembly = null;
-  try { assembly = await getAssembly(assemblyNo); } catch { /* app db offline */ }
-  let rows = [];
-  try {
-    const db = getVoterDb();
-    const coll = db.collection(collectionForAc(assemblyNo));
-    const parts = booths.map((b) => parseInt(b, 10)).filter((n) => !Number.isNaN(n));
-    const agg = await coll.aggregate([
-      { $match: { PART_NO: { $in: parts } } },
-      { $group: { _id: '$PART_NO', booth_name: { $first: '$BOOTH_NAME' }, voter_count: { $sum: 1 } } },
-      { $sort: { _id: 1 } },
-    ]).toArray();
-    rows = agg.map((r) => ({
-      assembly_no: assemblyNo, assembly_name: assembly?.assembly_name || `Assembly ${assemblyNo}`,
-      part_no: r._id, booth_name: r.booth_name || '', voter_count: r.voter_count,
-    }));
-  } catch { /* voter db offline -> empty rows */ }
+  // Group booths by assembly_no
+  const defaultAc = rec?.assembly_id;
+  const byAssembly = new Map();
 
-  res.json({ success: true, isSample: false, account: account(rec, u), assembly_no: assemblyNo, booths: rows });
+  for (const b of booths) {
+    let acNo = defaultAc;
+    let partNo = null;
+    let acName = null;
+    let boothName = null;
+
+    if (typeof b === 'object' && b !== null) {
+      acNo = b.assembly_no || acNo;
+      partNo = parseInt(b.part_no, 10);
+      acName = b.assembly_name;
+      boothName = b.booth_name;
+    } else if (b != null && b !== '') {
+      partNo = parseInt(b, 10);
+    }
+
+    if (!acNo || Number.isNaN(partNo)) continue;
+
+    if (!byAssembly.has(acNo)) {
+      byAssembly.set(acNo, []);
+    }
+    byAssembly.get(acNo).push({ part_no: partNo, acName, boothName });
+  }
+
+  let rows = [];
+  const db = getVoterDb();
+
+  for (const [acNo, bList] of byAssembly.entries()) {
+    let assembly = null;
+    try { assembly = await getAssembly(acNo); } catch { /* offline */ }
+    const parts = bList.map((x) => x.part_no);
+
+    try {
+      const coll = db.collection(collectionForAc(acNo));
+      const agg = await coll.aggregate([
+        { $match: { PART_NO: { $in: parts } } },
+        { $group: { _id: '$PART_NO', booth_name: { $first: '$BOOTH_NAME' }, voter_count: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+      ]).toArray();
+
+      const aggMap = new Map(agg.map((r) => [r._id, r]));
+
+      for (const item of bList) {
+        const found = aggMap.get(item.part_no);
+        rows.push({
+          assembly_no: acNo,
+          assembly_name: item.acName || assembly?.assembly_name || `Assembly ${acNo}`,
+          part_no: item.part_no,
+          booth_name: found?.booth_name || item.boothName || `Booth ${item.part_no}`,
+          voter_count: found?.voter_count || 0,
+        });
+      }
+    } catch {
+      for (const item of bList) {
+        rows.push({
+          assembly_no: acNo,
+          assembly_name: item.acName || assembly?.assembly_name || `Assembly ${acNo}`,
+          part_no: item.part_no,
+          booth_name: item.boothName || `Booth ${item.part_no}`,
+          voter_count: 0,
+        });
+      }
+    }
+  }
+
+  res.json({ success: true, isSample: false, account: account(rec, u), booths: rows });
 }
 
 // Deterministic sample voter dataset for Preview Mode (705 records).
@@ -105,36 +169,58 @@ function buildSampleVoters() {
 }
 const SAMPLE_CACHE = buildSampleVoters();
 
-// Sample booth list (Preview Mode) — mirrors the 47 demo booths.
 function sampleBoothList() {
   return Array.from({ length: SAMPLE_BOOTHS }, (_, i) => ({
     assembly_no: 0, assembly_name: 'Sample Assembly', part_no: i + 1, booth_name: `Sample Booth ${i + 1}`,
   }));
 }
 
-// Resolve the ward's booth list (assigned or sample) for the social-media form.
 async function wardBooths(rec) {
   const booths = await effectiveBooths(rec);
   if (!booths.length) return { isSample: true, boothList: sampleBoothList() };
-  const assemblyNo = rec?.assembly_id;
-  let assembly = null;
-  try { assembly = await getAssembly(assemblyNo); } catch { /* offline */ }
+
+  let defaultAc = rec?.assembly_id;
+  if (!defaultAc && rec?.mobile_no) {
+    try {
+      const db = getAppDb();
+      const mob = String(rec.mobile_no).replace(/\D/g, '');
+      if (mob) {
+        const enq = await db.collection('tbl_enquiry').findOne({ mobile: mob });
+        if (enq?.assembly_id) defaultAc = enq.assembly_id;
+      }
+    } catch { /* ignore */ }
+  }
+
   let boothList = [];
-  try {
-    const db = getVoterDb();
-    const coll = db.collection(collectionForAc(assemblyNo));
-    const parts = booths.map((b) => parseInt(b, 10)).filter((n) => !Number.isNaN(n));
-    const agg = await coll.aggregate([
-      { $match: { PART_NO: { $in: parts } } },
-      { $group: { _id: '$PART_NO', booth_name: { $first: '$BOOTH_NAME' } } },
-      { $sort: { _id: 1 } },
-    ]).toArray();
-    boothList = agg.map((r) => ({ assembly_no: assemblyNo, assembly_name: assembly?.assembly_name || `Assembly ${assemblyNo}`, part_no: r._id, booth_name: r.booth_name || '' }));
-  } catch { /* offline */ }
+
+  for (const b of booths) {
+    let acNo = defaultAc;
+    let partNo = null;
+    let acName = rec?.assembly_name;
+    let boothName = null;
+
+    if (typeof b === 'object' && b !== null) {
+      acNo = b.assembly_no || acNo;
+      partNo = parseInt(b.part_no, 10);
+      acName = b.assembly_name || acName;
+      boothName = b.booth_name;
+    } else if (b != null && b !== '') {
+      partNo = parseInt(b, 10);
+    }
+
+    if (!acNo || Number.isNaN(partNo)) continue;
+
+    boothList.push({
+      assembly_no: acNo,
+      assembly_name: acName || `Assembly ${acNo}`,
+      part_no: partNo,
+      booth_name: boothName || `Booth ${partNo}`,
+    });
+  }
+
   return { isSample: false, boothList };
 }
 
-// GET /ward/social-media — booth list + which service requests already exist.
 export async function socialMedia(req, res) {
   const rec = await wardRecord(req);
   const { isSample, boothList } = await wardBooths(rec);
@@ -149,11 +235,10 @@ export async function socialMedia(req, res) {
   res.json({ success: true, isSample, boothList, existingRequests });
 }
 
-// GET /ward/social-media/booth-sections — section numbers for a booth.
 export async function boothSections(req, res) {
   const { assembly_no, part_no, is_sample } = req.query;
   if (is_sample === '1' || is_sample === 1) {
-    return res.json([1, 2, 3, 4]); // sample sections
+    return res.json([1, 2, 3, 4]);
   }
   try {
     const db = getVoterDb();
@@ -163,7 +248,6 @@ export async function boothSections(req, res) {
   } catch { res.json([]); }
 }
 
-// POST /ward/social-media/request — store a broadcast service request for admin fulfilment.
 export async function socialMediaRequest(req, res) {
   const rec = await wardRecord(req);
   const b = req.body || {};
@@ -205,7 +289,6 @@ export async function socialMediaRequest(req, res) {
   }
 }
 
-// GET /ward/sample-voters — paginated + searchable sample dataset for Preview Mode.
 export function sampleVoters(req, res) {
   const search = (req.query.search || '').trim().toLowerCase();
   const page = Number(req.query.page || 1);

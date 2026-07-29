@@ -34,27 +34,54 @@ export default function BoothLogins() {
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Booth-wise Logins</h1>
-      <p className="muted" style={{ marginTop: -8 }}>One login per booth (PART_NO), user_group_id = 4. Passcode = MLA passcode + booth number.</p>
-      <div className="card">
-        <div className="row">
-          <div><label>Assembly</label>
+      <p className="muted" style={{ marginTop: -8 }}>
+        One login per booth (PART_NO), user_group_id = 4. Passcode = MLA passcode + booth number.
+      </p>
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <div className="row" style={{ alignItems: 'flex-end', gap: 12, marginBottom: 16 }}>
+          <div style={{ flex: 1, maxWidth: 320 }}>
+            <label>Assembly</label>
             <select value={assemblyId} onChange={(e) => load(e.target.value)}>
               <option value="">Select Assembly</option>
               {assemblies.map((a) => <option key={a.assembly_no} value={a.assembly_no}>{a.assembly_no} - {a.assembly_name}</option>)}
-            </select></div>
+            </select>
+          </div>
+          <div className="muted" style={{ fontWeight: 600, fontSize: 13, paddingBottom: 8 }}>{rows.length} booth logins</div>
         </div>
+
         {err && <div className="alert err">{err}</div>}
-        <table>
-          <thead><tr><th>Booth</th><th>Username</th><th>Passcode</th><th>Status</th></tr></thead>
-          <tbody>
-            {loading ? <tr><td colSpan={4}><Spinner label="Loading booth logins…" /></td></tr> : (<>
-              {rows.map((r) => (
-                <tr key={r.booth_no}><td>{r.booth_no}</td><td>{r.username}</td><td>{r.passcode}</td><td>{r.status}</td></tr>
-              ))}
-              {!rows.length && <tr><td colSpan={4} className="muted" style={{ textAlign: 'center', padding: 18 }}>No booth logins for this assembly.</td></tr>}
-            </>)}
-          </tbody>
-        </table>
+
+        <div style={{ overflowX: 'auto', width: '100%' }}>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 70 }}>Booth</th>
+                <th>Username</th>
+                <th>Passcode</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={3}><Spinner label="Loading booth logins…" /></td></tr>
+              ) : (
+                <>
+                  {rows.map((r) => (
+                    <tr key={r.booth_no}>
+                      <td><span className="assembly-no-badge">#{r.booth_no}</span></td>
+                      <td><strong>{r.username}</strong></td>
+                      <td>
+                        <code style={{ background: '#e8f5e9', color: '#2e7d32', fontWeight: 700, padding: '2px 8px', borderRadius: 4 }}>
+                          {r.passcode}
+                        </code>
+                      </td>
+                    </tr>
+                  ))}
+                  {!rows.length && <tr><td colSpan={3} className="muted" style={{ textAlign: 'center', padding: 18 }}>No booth logins for this assembly.</td></tr>}
+                </>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

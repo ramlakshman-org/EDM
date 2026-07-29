@@ -3,13 +3,30 @@ import { toObjectId } from '../utils/objectId.js';
 
 const COLL = 'tbl_user';
 
-// Auth lookup: mobile_no + password_str (string or int), mirroring LoginController.
-export async function findByCredentials(mobileNo, password) {
+// Auth lookup: mobile_no / user_name / email + password_str (string or int), mirroring LoginController.
+export async function findByCredentials(loginInput, password) {
   const db = getAppDb();
+  const cleanInput = String(loginInput || '').trim();
+  const cleanMobile = cleanInput.replace(/\D/g, '').slice(-10);
   const asInt = Number.isNaN(Number(password)) ? null : parseInt(password, 10);
+
+  const queryOr = [
+    { user_name: cleanInput },
+    { mobile_no: cleanInput },
+    { email: cleanInput },
+  ];
+  if (cleanMobile && cleanMobile.length === 10) {
+    queryOr.push({ mobile_no: cleanMobile });
+  }
+
+  const passOr = [
+    { password_str: password },
+    ...(asInt !== null ? [{ password_str: asInt }] : []),
+  ];
+
   return db.collection(COLL).findOne({
-    mobile_no: mobileNo,
-    $or: [{ password_str: password }, ...(asInt !== null ? [{ password_str: asInt }] : [])],
+    $or: queryOr,
+    $and: [{ $or: passOr }],
   });
 }
 

@@ -128,3 +128,57 @@ export async function remove(req, res) {
     res.status(500).json({ success: false, message: e.message });
   }
 }
+
+const MSG_COLL = 'app_flow_messages';
+
+const DEFAULT_MESSAGES = {
+  register_welcome_text: 'Welcome! Register to access constituency insights, voter patterns, campaign tools, and local body election support.\n\nTap the button below to fill out the registration form inside WhatsApp.',
+  welcome_back_text: 'Welcome back *{name}*! You are already registered.\n\n🔑 *Username:* `{username}`\n🔒 *Passcode:* `{passcode}`\n\nUse these credentials to log in to the Election Management Dashboard.',
+  register_success_text: 'Congratulations *{name}*! 🎉 Your registration has been completed successfully.\n\n🔑 *Username:* `{username}`\n🔒 *Passcode:* `{passcode}`\n\nTap below to log in to your Election Management Dashboard!',
+};
+
+// GET /flow-images/messages — Get current WhatsApp welcome messages
+export async function getMessages(req, res) {
+  try {
+    const docs = await getAppDb().collection(MSG_COLL).find({}).toArray();
+    const messages = { ...DEFAULT_MESSAGES };
+    for (const d of docs) {
+      if (d.key && d.text) {
+        messages[d.key] = d.text;
+      }
+    }
+    res.json({ success: true, messages });
+  } catch (e) {
+    if (e.message === 'APP_DB_OFFLINE') return res.status(503).json({ success: false, message: 'App database unavailable.' });
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
+// POST /flow-images/messages — Save/Update WhatsApp welcome messages
+export async function saveMessages(req, res) {
+  try {
+    const { register_welcome_text, welcome_back_text, register_success_text } = req.body || {};
+    const coll = getAppDb().collection(MSG_COLL);
+
+    const items = [
+      { key: 'register_welcome_text', text: register_welcome_text },
+      { key: 'welcome_back_text', text: welcome_back_text },
+      { key: 'register_success_text', text: register_success_text },
+    ];
+
+    for (const item of items) {
+      if (item.text !== undefined) {
+        await coll.updateOne(
+          { key: item.key },
+          { $set: { key: item.key, text: String(item.text), updated_at: new Date() } },
+          { upsert: true }
+        );
+      }
+    }
+
+    res.json({ success: true, message: 'Welcome messages saved successfully!' });
+  } catch (e) {
+    if (e.message === 'APP_DB_OFFLINE') return res.status(503).json({ success: false, message: 'App database unavailable.' });
+    res.status(500).json({ success: false, message: e.message });
+  }
+}

@@ -107,11 +107,15 @@ export default function MlaImages() {
 
       {tab === 'profiles' && (
         <div className="card">
-          <div className="row">
-            <div><label>Search</label><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="constituency / member" style={{ width: 260 }} /></div>
-            <div className="muted" style={{ alignSelf: 'flex-end', paddingBottom: 6 }}>{filteredMembers.length} constituencies</div>
+          <div className="row" style={{ alignItems: 'flex-end', gap: 12, marginBottom: 16 }}>
+            <div style={{ flex: 1, maxWidth: 320 }}><label>Search</label>
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Constituency or member name..." />
+            </div>
+            <div className="muted" style={{ fontWeight: 600, fontSize: 13, paddingBottom: 10 }}>{filteredMembers.length} constituencies</div>
           </div>
-          <div style={{ overflowX: 'auto' }}>
+
+          {/* Desktop Table View */}
+          <div className="mla-images-table-wrapper" style={{ overflowX: 'auto' }}>
             <table>
               <thead><tr><th style={{ width: 64 }}>Photo</th><th>Constituency</th><th>Elected Member</th><th style={{ width: 320 }}>Upload</th></tr></thead>
               <tbody>
@@ -136,6 +140,47 @@ export default function MlaImages() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile Cards View */}
+          <div className="mla-img-mobile-list">
+            {filteredMembers.map(([no, name, member]) => {
+              const url = profiles[no];
+              const bk = `profile:${no}`;
+              return (
+                <div key={no} className="mla-img-card">
+                  <div className="mla-img-card-top">
+                    <div className="mla-card-avatar">
+                      {url ? (
+                        <img className="mla-photo-lg" src={url} alt={member} />
+                      ) : (
+                        <span className="mla-photo-lg placeholder">{member.charAt(0)}</span>
+                      )}
+                    </div>
+                    <div className="mla-img-card-meta">
+                      <div className="mla-constituency">{no} - {name}</div>
+                      <div className="mla-member-name">{member}</div>
+                    </div>
+                  </div>
+                  <div className="mla-img-card-action">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={busy === bk}
+                      onChange={(e) => pick('profile', no, e.target.files?.[0])}
+                    />
+                    {busy === bk && <span className="muted" style={{ fontSize: 12 }}>Uploading…</span>}
+                    {url && (
+                      <button className="danger" onClick={() => removeProfile(no)} style={{ padding: '6px 14px', fontSize: 13 }}>
+                        Delete Photo
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {!filteredMembers.length && <div className="muted" style={{ textAlign: 'center', padding: 24 }}>No matches found.</div>}
+          </div>
+
         </div>
       )}
     </div>

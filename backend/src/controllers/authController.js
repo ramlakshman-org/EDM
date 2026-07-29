@@ -48,12 +48,14 @@ export async function login(req, res) {
       assembly_id: user.assembly_id ?? null,
       booth_id: user.booth_id ?? null,
       ward_id: user.ward_id ?? null,
+      mobile: String(user.mobile_no || '').replace(/\D/g, ''),
     };
     return res.json({
       success: true,
       token: signToken(claims),
       user: {
         name: claims.name,
+        first_name: user.first_name || claims.name,
         group_id: groupId,
         role: ROLE_NAME[groupId] || 'User',
         assembly_id: claims.assembly_id,
@@ -61,6 +63,13 @@ export async function login(req, res) {
         ward_id: claims.ward_id,
         has_booths: hasBooths,
         home: roleHome(groupId),
+        mobile: claims.mobile,
+        mobile_no: claims.mobile,
+        district_id: user.district_id,
+        category_name: user.category_name,
+        candidate_type: user.candidate_type,
+        booths: user.booths || [],
+        paid_status: user.paid_status || 'No',
       },
     });
   } catch (e) {
@@ -93,6 +102,15 @@ export async function register(req, res) {
     const wardNoRaw = b.ward_number || b.ward_id || '';
     const cleanWard = String(wardNoRaw).replace(/[^0-9]/g, '') || String(wardNoRaw);
 
+    const assemblyId = b.assembly_id ? Number(b.assembly_id) : null;
+    const assemblyName = b.assembly_name || '';
+    const rawBooths = Array.isArray(b.booths) ? b.booths : [];
+
+    const boothObjects = rawBooths.map((bNo) => ({
+      assembly_no: assemblyId,
+      part_no: Number(bNo),
+    }));
+
     // 1) Upsert enquiry record (feeds the admin Registrations page — mirrors tbl_enquiry).
     const enquiry = {
       full_name: fullName, firstname: fullName, mobile,
@@ -101,42 +119,37 @@ export async function register(req, res) {
       union_or_municipality: b.union_or_municipality || '',
       panchayat_or_corporation: b.panchayat_or_corporation || '',
       ward_number: cleanWard, passcode,
+      assembly_id: assemblyId,
+      assembly_name: assemblyName,
+      booths: rawBooths,
+      booth_count: rawBooths.length,
     };
     const existingEnq = await db.collection('tbl_enquiry').findOne({ mobile });
     if (existingEnq) await db.collection('tbl_enquiry').updateOne({ mobile }, { $set: enquiry });
     else await db.collection('tbl_enquiry').insertOne({ ...enquiry, created_at: new Date().toISOString() });
 
-    // 2) Ward accounts (two-tier): one main-admin per combination + one user login per mobile.
-    if (district && localBody && cleanWard) {
-      const main = await findWardMainAdmin({ district_id: district, category_name: localBody, ward_id: cleanWard, candidate_type: bodyType, position });
-      if (!main) {
-        const cleanLocalBody = localBody.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const adminUsername = `${cleanLocalBody}_w${cleanWard}`;
-        const id = (await maxUserId()) + 1;
-        await db.collection('tbl_user').insertOne({
-          ...blankUser(), id, user_group_id: ROLES.WARD,
-          first_name: `${district} - ${localBody} - Ward ${cleanWard}`,
-          mobile_no: adminUsername, password_str: String(Math.floor(100000 + Math.random() * 900000)),
-          district_id: district, category_name: localBody, ward_id: cleanWard,
-          candidate_type: bodyType, position, booths: [],
-        });
-      }
-
-      const userExists = await db.collection('tbl_user').findOne({ mobile_no: mobile });
-      if (!userExists) {
-        const id = (await maxUserId()) + 1;
-        await db.collection('tbl_user').insertOne({
-          ...blankUser(), id, user_group_id: ROLES.WARD,
-          first_name: fullName, mobile_no: mobile, password_str: passcode,
-          district_id: district, category_name: localBody, ward_id: cleanWard,
-          candidate_type: bodyType, position, is_user_login: true, booths: [],
-        });
-      } else {
-        await db.collection('tbl_user').updateOne({ mobile_no: mobile }, { $set: {
-          password_str: passcode, district_id: district, category_name: localBody,
-          ward_id: cleanWard, candidate_type: bodyType, position, first_name: fullName,
-        } });
-      }
+    // 2) User login account (Multi-booths Candidate Login - Group 11 / 4 or 6)
+    const assignedGroupId = rawBooths.length > 0 ? ROLES.BOOTH_ALT : (cleanWard ? ROLES.WARD : ROLES.BOOTH_ALT);
+    const userExists = await db.collection('tbl_user').findOne({ mobile_no: mobile });
+    if (!userExists) {
+      const id = (await maxUserId()) + 1;
+      await db.collection('tbl_user').insertOne({
+        ...blankUser(), id, user_group_id: assignedGroupId,
+        first_name: fullName, mobile_no: mobile, password_str: passcode,
+        district_id: district, category_name: localBody, ward_id: cleanWard,
+        candidate_type: bodyType, position, is_user_login: true,
+        assembly_id: assemblyId, assembly_name: assemblyName,
+        booths: boothObjects,
+      });
+    } else {
+      await db.collection('tbl_user').updateOne({ mobile_no: mobile }, { $set: {
+        user_group_id: assignedGroupId,
+        password_str: passcode, district_id: district, category_name: localBody,
+        ward_id: cleanWard, candidate_type: bodyType, position, first_name: fullName,
+        assembly_id: assemblyId, assembly_name: assemblyName,
+        booths: boothObjects,
+        is_user_login: true,
+      } });
     }
 
     return res.json({ success: true, message: 'Registration successful!', username: mobile, passcode });
@@ -145,6 +158,53 @@ export async function register(req, res) {
   }
 }
 
-export function me(req, res) {
-  res.json({ success: true, user: { ...req.user, role: ROLE_NAME[req.user.group_id] || 'User', home: roleHome(req.user.group_id) } });
+export async function me(req, res) {
+  try {
+    const db = getAppDb();
+    let dbUser = null;
+    if (req.user?.sub && req.user.sub !== 'admin') {
+      try { dbUser = await findById(req.user.sub); } catch { /* ignore */ }
+    }
+    const groupId = Number(req.user?.group_id || 0);
+    const mobileNo = dbUser?.mobile_no || req.user?.mobile || '';
+    return res.json({
+      success: true,
+      user: {
+        ...req.user,
+        mobile_no: mobileNo,
+        mobile: mobileNo,
+        first_name: dbUser?.first_name || req.user?.name || '',
+        district_id: dbUser?.district_id || dbUser?.district || '',
+        category_name: dbUser?.category_name || '',
+        candidate_type: dbUser?.candidate_type || dbUser?.position || '',
+        paid_status: dbUser?.paid_status || 'No',
+        booths: dbUser?.booths || [],
+        assembly_id: dbUser?.assembly_id || req.user?.assembly_id,
+        assembly_name: dbUser?.assembly_name || '',
+        role: ROLE_NAME[groupId] || 'User',
+        home: roleHome(groupId),
+      },
+    });
+  } catch (e) {
+    return res.json({
+      success: true,
+      user: {
+        ...req.user,
+        role: ROLE_NAME[req.user?.group_id] || 'User',
+        home: roleHome(req.user?.group_id),
+      },
+    });
+  }
+}
+
+// POST /auth/refresh — slide the session. Called by the frontend only on genuine
+// user activity (throttled), so background polling can't keep an idle session
+// alive. Re-issues a fresh token from the already-verified claims.
+export async function refresh(req, res) {
+  const claims = { ...(req.user || {}) };
+  // Drop JWT-managed fields so signToken can set fresh iat/exp.
+  delete claims.iat;
+  delete claims.exp;
+  delete claims.nbf;
+  return res.json({ success: true, token: signToken(claims) });
 }

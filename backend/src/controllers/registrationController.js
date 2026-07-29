@@ -80,15 +80,15 @@ export async function list(req, res) {
 
     const mobiles = docs.map((d) => clean(d.mobile)).filter(Boolean);
 
-    // Passcode fallback: look up user logins by mobile in one query.
+    // Passcode & payment status fallback: look up user logins by mobile in one query.
     const users = mobiles.length
       ? await db.collection('tbl_user').find(
-          { mobile_no: { $in: docs.map((d) => d.mobile).filter(Boolean) }, is_user_login: true },
-          { projection: { mobile_no: 1, password_str: 1 } },
+          { mobile_no: { $in: docs.map((d) => d.mobile).filter(Boolean) } },
+          { projection: { mobile_no: 1, password_str: 1, paid_status: 1, transaction_id: 1, assembly_id: 1, assembly_name: 1, booths: 1 } },
         ).toArray()
       : [];
-    const passByMobile = {};
-    for (const u of users) passByMobile[clean(u.mobile_no)] = u.password_str;
+    const userByMobile = {};
+    for (const u of users) userByMobile[clean(u.mobile_no)] = u;
 
     const reqByMobile = await socialRequestsFor(db, mobiles);
 
@@ -96,6 +96,10 @@ export async function list(req, res) {
       success: true, total, page, pageSize,
       rows: docs.map((r) => {
         const cm = clean(r.mobile);
+        const uRec = userByMobile[cm];
+        const rawBooths = Array.isArray(r.booths) && r.booths.length > 0 ? r.booths : (Array.isArray(r.selected_booths) && r.selected_booths.length > 0 ? r.selected_booths : (Array.isArray(uRec?.booths) ? uRec.booths : []));
+        const assId = r.assembly_id || r.assembly_no || uRec?.assembly_id || null;
+        const assName = r.assembly_name || r.assembly || uRec?.assembly_name || null;
         return {
           _id: r._id,
           id: r.id ?? null,
@@ -106,7 +110,13 @@ export async function list(req, res) {
           body_type: r.body_type || '-',
           local_body: r.union_or_municipality || r.panchayat_or_corporation || '-',
           ward_number: r.ward_number || '-',
-          passcode: r.passcode || passByMobile[cm] || '-',
+          assembly_id: assId,
+          assembly_name: assName,
+          booths: rawBooths,
+          booth_count: rawBooths.length || r.booth_count || 0,
+          passcode: r.passcode || uRec?.password_str || '-',
+          paid_status: uRec?.paid_status || 'No',
+          transaction_id: uRec?.transaction_id || null,
           created_at: r.created_at || '-',
           // just the service types for the compact icon column
           requests: (reqByMobile[cm] || []).map((x) => x.service_type),
@@ -128,19 +138,75 @@ export async function detail(req, res) {
     const oid = toObjectId(req.params.id);
     if (oid) reg = await coll.findOne({ _id: oid });
     if (!reg && /^\d+$/.test(req.params.id)) reg = await coll.findOne({ id: parseInt(req.params.id, 10) });
+
+    if (!reg) {
+      let uDoc = null;
+      if (oid) uDoc = await db.collection('tbl_user').findOne({ _id: oid });
+      if (!uDoc && /^\d+$/.test(req.params.id)) uDoc = await db.collection('tbl_user').findOne({ id: parseInt(req.params.id, 10) });
+
+      if (uDoc?.mobile_no) {
+        reg = await coll.findOne({ mobile: uDoc.mobile_no });
+        if (!reg) {
+          reg = {
+            _id: uDoc._id,
+            full_name: [uDoc.first_name, uDoc.last_name].filter(Boolean).join(' ') || uDoc.mobile_no || 'Ward User',
+            mobile: uDoc.mobile_no,
+            district: uDoc.district_id || '-',
+            position: uDoc.candidate_type || 'Ward Member',
+            body_type: uDoc.candidate_type ? (['Corporation', 'Municipality', 'Town Panchayat'].includes(uDoc.candidate_type) ? 'urban' : 'rural') : 'urban',
+            union_or_municipality: uDoc.category_name || '-',
+            panchayat_or_corporation: uDoc.category_name || '-',
+            ward_number: uDoc.ward_id || '-',
+            created_at: uDoc.created_at || new Date().toISOString(),
+          };
+        }
+      }
+    }
+
     if (!reg) return res.status(404).json({ success: false, message: 'Registration not found.' });
 
     const reqByMobile = await socialRequestsFor(db, [clean(reg.mobile)]);
-    // passcode fallback
+    
+    // Passcode & Payment lookup
     let passcode = reg.passcode || '';
-    if (!passcode && reg.mobile) {
-      const u = await db.collection('tbl_user').findOne({ mobile_no: reg.mobile, is_user_login: true }, { projection: { password_str: 1 } });
-      if (u?.password_str) passcode = u.password_str;
+    let userRec = null;
+    let paymentDoc = null;
+
+    if (reg.mobile) {
+      userRec = await db.collection('tbl_user').findOne({ mobile_no: reg.mobile });
+      if (userRec?.password_str) passcode = userRec.password_str;
+
+      if (userRec?.paid_status === 'Yes' || userRec?.transaction_id) {
+        paymentDoc = await db.collection('tbl_payment').findOne({
+          $or: [
+            { payment_id: userRec.transaction_id },
+            { user_id: String(userRec._id) },
+            { mobile_no: reg.mobile }
+          ]
+        });
+      }
     }
 
     res.json({
       success: true,
-      registration: { ...reg, passcode },
+      registration: {
+        ...reg,
+        passcode,
+        paid_status: userRec?.paid_status || 'No',
+        transaction_id: userRec?.transaction_id || paymentDoc?.payment_id || null,
+        payment: paymentDoc ? {
+          payment_id: paymentDoc.payment_id,
+          order_id: paymentDoc.order_id,
+          amount: Number(paymentDoc.amount) > 1000 ? Number(paymentDoc.amount) / 100 : Number(paymentDoc.amount),
+          status: paymentDoc.status || 'Paid',
+          booth_count: paymentDoc.booth_count || (Array.isArray(userRec?.booths) ? userRec.booths.length : 1),
+          created_at: paymentDoc.created_at,
+        } : (userRec?.paid_status === 'Yes' ? {
+          payment_id: userRec.transaction_id || 'Captured',
+          amount: reg.mobile === '8106811285' ? 1 : 2360,
+          status: 'Paid',
+        } : null),
+      },
       socialRequests: reqByMobile[clean(reg.mobile)] || [],
     });
   } catch (e) {

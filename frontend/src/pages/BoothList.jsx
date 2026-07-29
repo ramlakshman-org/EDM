@@ -34,32 +34,72 @@ export default function BoothList() {
     <div>
       <h1 style={{ marginTop: 0 }}>Booth List</h1>
       <div className="card">
-        <div className="row">
-          <div><label>Assembly</label>
+        <div className="row" style={{ alignItems: 'flex-end', gap: 12, marginBottom: 16 }}>
+          <div style={{ flex: 1, maxWidth: 320 }}>
+            <label>Assembly</label>
             <select value={assemblyId} onChange={(e) => load(e.target.value)}>
               <option value="">Select Assembly</option>
               {assemblies.map((a) => <option key={a.assembly_no} value={a.assembly_no}>{a.assembly_no} - {a.assembly_name}</option>)}
-            </select></div>
+            </select>
+          </div>
+          <div className="muted" style={{ fontWeight: 600, fontSize: 13, paddingBottom: 8 }}>{booths.length} booths</div>
         </div>
+
         {err && <div className="alert err">{err}</div>}
-        <table>
-          <thead><tr><th>Part No</th><th>Booth Name</th><th>Section</th><th>Lat/Long Status</th></tr></thead>
-          <tbody>
-            {loading ? <tr><td colSpan={4}><Spinner label="Loading booths…" /></td></tr> : (<>
+
+        {/* Desktop Table View */}
+        <div className="booth-table-wrapper" style={{ overflowX: 'auto', width: '100%' }}>
+          <table>
+            <thead><tr><th style={{ width: 80 }}>Part No</th><th>Booth Name</th><th>Section</th><th style={{ width: 130 }}>GPS Status</th></tr></thead>
+            <tbody>
+              {loading ? <tr><td colSpan={4}><Spinner label="Loading booths…" /></td></tr> : (<>
+                {booths.map((b) => (
+                  <tr key={b.part_no}>
+                    <td><span className="assembly-no-badge">#{b.part_no}</span></td>
+                    <td><strong>{b.booth_name}</strong></td>
+                    <td>{b.section_name || '-'}</td>
+                    <td>
+                      {b.has_coords
+                        ? <span className="badge-success">Available</span>
+                        : <span className="badge-info" style={{ background: '#ef4444', color: '#fff' }}>Not Available</span>}
+                    </td>
+                  </tr>
+                ))}
+                {!booths.length && <tr><td colSpan={4} className="muted" style={{ textAlign: 'center', padding: 18 }}>No booths.</td></tr>}
+              </>)}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile View Cards */}
+        <div className="booth-mobile-list">
+          {loading ? (
+            <Spinner label="Loading booths…" />
+          ) : (
+            <>
               {booths.map((b) => (
-                <tr key={b.part_no}>
-                  <td>{b.part_no}</td><td>{b.booth_name}</td><td>{b.section_name}</td>
-                  <td>
-                    {b.has_coords
-                      ? <span className="badge-success">Available</span>
-                      : <span className="badge-info" style={{ background: '#d9534f' }}>Not Available</span>}
-                  </td>
-                </tr>
+                <div key={b.part_no} className="booth-card-item">
+                  <div className="booth-card-head">
+                    <span className="assembly-no-badge">Part #{b.part_no}</span>
+                    {b.has_coords ? (
+                      <span className="badge-success" style={{ fontSize: 11 }}>GPS Available</span>
+                    ) : (
+                      <span style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10 }}>No GPS</span>
+                    )}
+                  </div>
+                  <div className="booth-name-title">{b.booth_name}</div>
+                  {b.section_name && b.section_name !== '-' && (
+                    <div className="booth-section-info">
+                      <span className="lbl">Section:</span> {b.section_name}
+                    </div>
+                  )}
+                </div>
               ))}
-              {!booths.length && <tr><td colSpan={4} className="muted" style={{ textAlign: 'center', padding: 18 }}>No booths.</td></tr>}
-            </>)}
-          </tbody>
-        </table>
+              {!booths.length && <div className="muted" style={{ textAlign: 'center', padding: 24 }}>No booths found for this assembly.</div>}
+            </>
+          )}
+        </div>
+
       </div>
     </div>
   );

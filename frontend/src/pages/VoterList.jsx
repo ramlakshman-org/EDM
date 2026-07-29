@@ -3,6 +3,7 @@ import VoterDetailModal from '../components/VoterDetailModal.jsx';
 import api from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import Spinner from '../components/Spinner.jsx';
+import Pagination from '../components/Pagination.jsx';
 import { IconCall, IconMail, IconWhatsApp, IconView } from '../components/Icons.jsx';
 
 // Roles that may pick any assembly (mirrors VoterController: 1 SuperAdmin, 2 MP, 7 Telecaller, 10 DSA).
@@ -33,14 +34,84 @@ export default function VoterList() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [detail, setDetail] = useState(null);
+  const [wardSampleMode, setWardSampleMode] = useState(null);
 
-  if (isWard && (user?.has_booths === false || user?.has_booths === 0)) {
+  useEffect(() => {
+    // 1. Fetch assemblies list
+    api.get('/assemblies').then(({ data }) => {
+      const list = data.assemblies || [];
+      setAssemblies(list);
+      if (canChoose && !f.assemblyId && list.length) {
+        const first = String(list[0].assembly_no);
+        setF((s) => ({ ...s, assemblyId: first }));
+        load(1, first);
+      }
+    }).catch(() => {});
+
+    // 2. Check Ward mode & auto-load
+    if (isWard) {
+      api.get('/ward/home')
+        .then(({ data }) => {
+          if (data.isSample) {
+            setWardSampleMode(true);
+            setLoading(false);
+          } else {
+            setWardSampleMode(false);
+            load(1);
+          }
+        })
+        .catch(() => {
+          setWardSampleMode(false);
+          load(1);
+        });
+    } else if (!canChoose) {
+      load(1);
+    }
+    // eslint-disable-next-line
+  }, []);
+
+  const assemblyName = assemblies.find((a) => String(a.assembly_no) === String(f.assemblyId))?.assembly_name;
+
+  const userBoothsList = (data?.scope?.userBooths || user?.booths || []).map((b) => (typeof b === 'object' && b !== null ? parseInt(b.part_no, 10) : parseInt(b, 10))).filter((n) => !Number.isNaN(n));
+  const uniqueBooths = [...new Set(userBoothsList)].sort((a, b) => a - b);
+
+  const scopeLabel = isBooth
+    ? (uniqueBooths.length > 0 ? `Selected Booths: ${uniqueBooths.join(', ')}` : (lockedBooth ? `Booth ${lockedBooth}` : 'Your assigned booths'))
+    : isWard
+    ? 'Your ward booths'
+    : 'Your assembly';
+
+  const load = async (page = 1, assemblyOverride, boothOverride) => {
+    const assemblyId = assemblyOverride ?? f.assemblyId;
+    const boothId = boothOverride ?? f.boothId;
+    if (canChoose && !assemblyId) { setErr('Please select an assembly.'); return; }
+    setErr(''); setLoading(true);
+    try {
+      const { data } = await api.get('/voters', { params: { ...f, assemblyId, boothId, page, pageSize: 25 } });
+      setData(data);
+      if (data.scope?.assemblyId && !f.assemblyId) {
+        setF((s) => ({ ...s, assemblyId: String(data.scope.assemblyId) }));
+      }
+    } catch (e) {
+      setErr(e.response?.data?.message || 'Unable to load voter data.');
+      setData({ rows: [], total: 0, page: 1, pageSize: 25 });
+    } finally { setLoading(false); }
+  };
+
+  const openDetail = async (row) => {
+    setDetail(row);
+    try {
+      const { data } = await api.get('/voters/detail', { params: { assemblyId: f.assemblyId, id: row._id } });
+      if (data.success) setDetail(data.voter);
+    } catch { /* keep row data */ }
+  };
+
+  if (isWard && wardSampleMode === true) {
     return (
       <div>
-        <h1 style={{ marginTop: 0 }}>Voter List 🔒</h1>
-        <div className="alert warn" style={{ borderLeft: '5px solid #ffc107', marginTop: 14, padding: 18 }}>
-          <h3 style={{ margin: '0 0 8px', color: '#856404' }}>🔒 Access Locked (Preview &amp; Demonstration Mode)</h3>
-          <p style={{ margin: '0 0 14px', lineHeight: 1.5, color: '#664d03' }}>
+        <div className="alert warn" style={{ background: '#fff8e6', border: '1px solid #ffe58f', borderRadius: 8, padding: 16, marginBottom: 20 }}>
+          <h3 style={{ margin: '0 0 8px', color: '#d48806', fontSize: 16 }}>⚠️ Preview &amp; Demonstration Mode</h3>
+          <p style={{ margin: '0 0 12px', fontSize: 14, color: '#595959' }}>
             Your ward account is currently in <b>Preview &amp; Demonstration Mode</b> because polling booths have not been assigned by your system administrator yet. Official constituency voter list access will unlock automatically once your polling booths are assigned.
           </p>
           <div>
@@ -53,93 +124,103 @@ export default function VoterList() {
     );
   }
 
-  useEffect(() => {
-    api.get('/assemblies').then(({ data }) => {
-      const list = data.assemblies || [];
-      setAssemblies(list);
-      // Admin/chooser roles: default to the first assembly and load it.
-      if (canChoose && !f.assemblyId && list.length) {
-        const first = String(list[0].assembly_no);
-        setF((s) => ({ ...s, assemblyId: first }));
-        load(1, first);
-      } else if (canChoose) {
-        setLoading(false); // chooser role but nothing to auto-load
-      }
-    }).catch(() => setLoading(false));
-    if (!canChoose && lockedAssembly) load(1);
-    else if (!canChoose && !lockedAssembly) setLoading(false);
-    // eslint-disable-next-line
-  }, []);
-
-  const assemblyName = assemblies.find((a) => String(a.assembly_no) === String(f.assemblyId))?.assembly_name;
-
-  const load = async (page = 1, assemblyOverride) => {
-    const assemblyId = assemblyOverride ?? f.assemblyId;
-    if (canChoose && !assemblyId) { setErr('Please select an assembly.'); return; }
-    setErr(''); setLoading(true);
-    try {
-      const { data } = await api.get('/voters', { params: { ...f, assemblyId, page, pageSize: 25 } });
-      setData(data);
-    } catch (e) {
-      setErr(e.response?.data?.message || 'Unable to load voter data.');
-      setData({ rows: [], total: 0, page: 1, pageSize: 25 });
-    } finally { setLoading(false); }
-  };
-
-  const openDetail = async (row) => {
-    // Show immediately from the row, then enrich from the detail endpoint.
-    setDetail(row);
-    try {
-      const { data } = await api.get('/voters/detail', { params: { assemblyId: f.assemblyId, id: row._id } });
-      if (data.success) setDetail(data.voter);
-    } catch { /* keep row data */ }
-  };
-
-  const pages = Math.ceil(data.total / data.pageSize) || 1;
-  const scopeLabel = isBooth ? `Booth ${lockedBooth}` : isWard ? 'Your ward booths' : 'Your assembly';
-
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Voters List</h1>
       {!canChoose && (
         <div className="alert warn">
-          Scoped to <strong>{assemblyName ? `${f.assemblyId} - ${assemblyName}` : `Assembly ${f.assemblyId || '—'}`}</strong> · {scopeLabel}.
+          Scoped to {f.assemblyId ? <strong>{assemblyName ? `${f.assemblyId} - ${assemblyName}` : `Assembly ${f.assemblyId}`}</strong> : <strong>Your assigned booths</strong>} · {scopeLabel}.
         </div>
       )}
       <div className="card">
-        <div className="row">
+        <div className="voter-filter-grid">
           {canChoose ? (
-            <div><label>Assembly</label>
+            <div className="filter-group fg-assembly">
+              <label>Assembly</label>
               <select value={f.assemblyId} onChange={(e) => setF({ ...f, assemblyId: e.target.value })}>
                 <option value="">Select Assembly</option>
                 {assemblies.map((a) => <option key={a.assembly_no} value={a.assembly_no}>{a.assembly_no} - {a.assembly_name}</option>)}
-              </select></div>
+              </select>
+            </div>
           ) : (
-            <div><label>Assembly</label>
-              <input value={assemblyName ? `${f.assemblyId} - ${assemblyName}` : f.assemblyId} disabled readOnly style={{ width: 220, background: '#eef1f6' }} /></div>
+            <div className="filter-group fg-assembly">
+              <label>Assembly</label>
+              <input value={f.assemblyId ? (assemblyName ? `${f.assemblyId} - ${assemblyName}` : f.assemblyId) : 'Assigned Ward Booths'} disabled readOnly style={{ background: '#eef1f6' }} />
+            </div>
           )}
-          <div><label>Gender</label>
+
+          <div className="filter-group fg-gender">
+            <label>Gender</label>
             <select value={f.gender} onChange={(e) => setF({ ...f, gender: e.target.value })}>
               <option value="">All</option><option>Male</option><option>Female</option>
-            </select></div>
-          {!isWard && (
-            <div><label>Booth (Part No)</label>
-              <input style={{ width: 100, ...(isBooth ? { background: '#eef1f6' } : {}) }} value={f.boothId}
-                readOnly={isBooth} disabled={isBooth}
-                onChange={(e) => setF({ ...f, boothId: e.target.value })} /></div>
-          )}
-          <div><label>Min Age</label><input style={{ width: 80 }} value={f.min_age} onChange={(e) => setF({ ...f, min_age: e.target.value })} /></div>
-          <div><label>Max Age</label><input style={{ width: 80 }} value={f.max_age} onChange={(e) => setF({ ...f, max_age: e.target.value })} /></div>
-          <div><label>Mobile only</label>
+            </select>
+          </div>
+
+          <div className="filter-group fg-mobile">
+            <label>Mobile only</label>
             <select value={f.has_mobile} onChange={(e) => setF({ ...f, has_mobile: e.target.value })}>
               <option value="">All</option><option value="1">With mobile</option>
-            </select></div>
-          <div><label>Search (EPIC / mobile / name)</label><input style={{ width: 220 }} value={f.search_text} onChange={(e) => setF({ ...f, search_text: e.target.value })} /></div>
-          <button onClick={() => load(1)} disabled={loading}>{loading ? 'Loading…' : 'Filter'}</button>
+            </select>
+          </div>
+
+          {!isWard && (
+            <div className="filter-group fg-booth">
+              <label>Booth (Part)</label>
+              {isBooth && uniqueBooths.length > 0 ? (
+                <select
+                  value={f.boothId}
+                  onChange={(e) => {
+                    const newBooth = e.target.value;
+                    setF((s) => ({ ...s, boothId: newBooth }));
+                    load(1, f.assemblyId, newBooth);
+                  }}
+                >
+                  <option value="">All Selected Booths ({uniqueBooths.length})</option>
+                  {uniqueBooths.map((p) => (
+                    <option key={p} value={p}>Booth {p}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={f.boothId}
+                  readOnly={isBooth && uniqueBooths.length <= 1}
+                  disabled={isBooth && uniqueBooths.length <= 1}
+                  style={isBooth && uniqueBooths.length <= 1 ? { background: '#eef1f6' } : {}}
+                  placeholder="Part No"
+                  onChange={(e) => setF({ ...f, boothId: e.target.value })}
+                />
+              )}
+            </div>
+          )}
+
+          <div className="filter-group fg-age-min">
+            <label>Min Age</label>
+            <input type="number" placeholder="18" value={f.min_age} onChange={(e) => setF({ ...f, min_age: e.target.value })} />
+          </div>
+
+          <div className="filter-group fg-age-max">
+            <label>Max Age</label>
+            <input type="number" placeholder="100" value={f.max_age} onChange={(e) => setF({ ...f, max_age: e.target.value })} />
+          </div>
+
+          <div className="filter-group fg-search">
+            <label>Search (EPIC / mobile / name)</label>
+            <input placeholder="EPIC, mobile or name..." value={f.search_text} onChange={(e) => setF({ ...f, search_text: e.target.value })} />
+          </div>
+
+          <div className="filter-group fg-btn">
+            <button className="filter-submit-btn" onClick={() => load(1)} disabled={loading}>
+              {loading ? 'Loading…' : 'Filter'}
+            </button>
+          </div>
         </div>
-        {err && <div className="alert err">{err}</div>}
-        <div className="muted">Count: {data.total.toLocaleString('en-IN')}</div>
-        <div style={{ overflowX: 'auto' }}>
+        {err && <div className="alert err" style={{ marginTop: 12 }}>{err}</div>}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '14px 0 10px' }}>
+          <span className="muted" style={{ fontWeight: 600, fontSize: 13 }}>Count: {data.total.toLocaleString('en-IN')} voters</span>
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="voter-table-wrapper" style={{ overflowX: 'auto' }}>
           <table>
             <thead><tr>
               <th>EPIC</th><th>Part No</th><th>SLNO</th><th>Elector Name</th><th>Relation Name</th><th>Mobile</th><th>Age</th><th>Gender</th>
@@ -171,13 +252,67 @@ export default function VoterList() {
             </tbody>
           </table>
         </div>
-        {!loading && data.total > data.pageSize && (
-          <div className="pager">
-            <button className="secondary" disabled={data.page <= 1} onClick={() => load(data.page - 1)}>Prev</button>
-            <span className="muted">Page {data.page} / {pages}</span>
-            <button className="secondary" disabled={data.page >= pages} onClick={() => load(data.page + 1)}>Next</button>
-          </div>
-        )}
+
+        {/* Mobile Voter Cards View */}
+        <div className="voter-mobile-list">
+          {loading && <Spinner label="Loading voters…" />}
+          {!loading && data.rows.map((v) => {
+            const d = digits(v.MOBILE_NUMBER);
+            const hasMob = d.length >= 10;
+            return (
+              <div key={v._id} className="voter-card-item">
+                <div className="voter-card-top">
+                  <div className="voter-epic-badge" onClick={() => openDetail(v)}>
+                    {v.EPIC_NO}
+                  </div>
+                  <div className="voter-part-slno">
+                    Part #{v.PART_NO} · SL #{v.SLNO ?? v.ID ?? '-'}
+                  </div>
+                </div>
+
+                <div className="voter-card-main" onClick={() => openDetail(v)}>
+                  <div className="voter-name">{v.VOTER_NAME_EN}</div>
+                  {v.RELATION_NAME_EN && (
+                    <div className="voter-sub-info">R/O: {v.RELATION_NAME_EN}</div>
+                  )}
+                  <div className="voter-meta-tags">
+                    <span className="voter-tag">{v.AGE} yrs</span>
+                    <span className="voter-tag">{v.GENDER}</span>
+                    {hasMob ? (
+                      <span className="voter-tag mob">{v.MOBILE_NUMBER}</span>
+                    ) : (
+                      <span className="voter-tag no-mob">No Mobile</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="voter-card-actions">
+                  {hasMob ? (
+                    <>
+                      <a className="voter-act-btn call" title="Call" href={`tel:+${d}`}>
+                        <IconCall size={16} color="#0071e3" /> Call
+                      </a>
+                      <a className="voter-act-btn sms" title="SMS" href={`sms:+${d}`}>
+                        <IconMail size={16} color="#0071e3" /> SMS
+                      </a>
+                      <a className="voter-act-btn wa" title="WhatsApp" target="_blank" rel="noreferrer" href={`https://wa.me/${d}`}>
+                        <IconWhatsApp size={17} color="#25D366" /> WA
+                      </a>
+                    </>
+                  ) : (
+                    <span className="muted" style={{ fontSize: 12 }}>No mobile</span>
+                  )}
+                  <button className="voter-act-btn view" onClick={() => openDetail(v)}>
+                    <IconView size={16} color="#0071e3" /> View
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {!loading && !data.rows.length && <div className="muted" style={{ textAlign: 'center', padding: 24 }}>No voters loaded.</div>}
+        </div>
+
+        <Pagination page={data.page} total={data.total} pageSize={data.pageSize} onPage={load} />
       </div>
 
       {detail && <VoterDetailModal voter={detail} onClose={() => setDetail(null)} />}

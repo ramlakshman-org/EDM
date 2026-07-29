@@ -13,6 +13,8 @@ api.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('edm_token');
+      localStorage.removeItem('edm_user');
+      localStorage.removeItem('edm_last_active');
       if (!location.pathname.startsWith('/login')) location.href = '/login';
     }
     return Promise.reject(err);

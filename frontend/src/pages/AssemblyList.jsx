@@ -55,33 +55,92 @@ export default function AssemblyList() {
       {msg && <div className="alert warn">{msg}</div>}
       {err && <div className="alert err">{err}</div>}
       <div className="card">
-        <div className="row"><div><label>Search</label><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="No. or name" /></div></div>
-        <table>
-          <thead><tr><th>No.</th><th>Name</th><th>District</th><th>Total Voters</th><th>Username</th><th>Passcode</th><th></th></tr></thead>
-          <tbody>
-            {loading && <tr><td colSpan={7}><Spinner label="Loading assemblies…" /></td></tr>}
-            {!loading && filtered.map((a) => {
-              const missing = !hasCred(a.username) || !hasCred(a.passcode);
-              return (
-                <tr key={a.assembly_no}>
-                  <td>{a.assembly_no}</td><td>{a.assembly_name}</td><td>{a.district || '-'}</td>
-                  <td>{Number(a.total_voters || 0).toLocaleString('en-IN')}</td>
-                  <td>{hasCred(a.username) ? <strong>{a.username}</strong> : <span className="muted">—</span>}</td>
-                  <td>{hasCred(a.passcode) ? <code style={{ background: '#e8f5e9', color: '#2e7d32', fontWeight: 700 }}>{a.passcode}</code> : <span className="muted">—</span>}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
+        <div className="row" style={{ alignItems: 'flex-end', gap: 12, marginBottom: 16 }}>
+          <div style={{ flex: 1, maxWidth: 320 }}><label>Search</label>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Constituency No. or name..." />
+          </div>
+          <div className="muted" style={{ fontWeight: 600, fontSize: 13, paddingBottom: 10 }}>{filtered.length} assemblies</div>
+        </div>
+
+        {loading ? (
+          <Spinner label="Loading assemblies…" />
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div className="assembly-table-wrapper" style={{ overflowX: 'auto' }}>
+              <table>
+                <thead><tr><th>No.</th><th>Name</th><th>District</th><th>Total Voters</th><th>Username</th><th>Passcode</th><th></th></tr></thead>
+                <tbody>
+                  {filtered.map((a) => {
+                    const missing = !hasCred(a.username) || !hasCred(a.passcode);
+                    return (
+                      <tr key={a.assembly_no}>
+                        <td>{a.assembly_no}</td><td>{a.assembly_name}</td><td>{a.district || '-'}</td>
+                        <td>{Number(a.total_voters || 0).toLocaleString('en-IN')}</td>
+                        <td>{hasCred(a.username) ? <strong>{a.username}</strong> : <span className="muted">—</span>}</td>
+                        <td>{hasCred(a.passcode) ? <code style={{ background: '#e8f5e9', color: '#2e7d32', fontWeight: 700 }}>{a.passcode}</code> : <span className="muted">—</span>}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {missing && (
+                            <button className="success" disabled={busy === a.assembly_no} onClick={() => generate(a.assembly_no)} style={{ marginRight: 8 }}>
+                              {busy === a.assembly_no ? 'Generating…' : 'Generate'}
+                            </button>
+                          )}
+                          <Link to={`/assemblies/${a.assembly_no}`}><button>Details</button></Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {!filtered.length && <tr><td colSpan={7} className="muted" style={{ textAlign: 'center', padding: 18 }}>No assemblies.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile View Cards */}
+            <div className="assembly-mobile-list">
+              {filtered.map((a) => {
+                const missing = !hasCred(a.username) || !hasCred(a.passcode);
+                return (
+                  <Link key={a.assembly_no} to={`/assemblies/${a.assembly_no}`} className="assembly-card-item">
+                    <div className="assembly-card-head">
+                      <div className="assembly-title">
+                        <span className="assembly-no-badge">#{a.assembly_no}</span>
+                        <strong>{a.assembly_name}</strong>
+                      </div>
+                      <span style={{ color: '#94a3b8', fontSize: 18, fontWeight: 700 }}>›</span>
+                    </div>
+                    <div className="assembly-card-body">
+                      <div className="assembly-kv">
+                        <span className="lbl">Username</span>
+                        <span className="val">{hasCred(a.username) ? <strong>{a.username}</strong> : <span className="muted">—</span>}</span>
+                      </div>
+                      <div className="assembly-kv">
+                        <span className="lbl">Passcode</span>
+                        <span className="val">
+                          {hasCred(a.passcode) ? (
+                            <code style={{ background: '#e8f5e9', color: '#2e7d32', fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>
+                              {a.passcode}
+                            </code>
+                          ) : (
+                            <span className="muted">—</span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
                     {missing && (
-                      <button className="success" disabled={busy === a.assembly_no} onClick={() => generate(a.assembly_no)} style={{ marginRight: 8 }}>
-                        {busy === a.assembly_no ? 'Generating…' : 'Generate'}
-                      </button>
+                      <div className="assembly-card-actions" onClick={(e) => e.preventDefault()}>
+                        <button className="success" disabled={busy === a.assembly_no} onClick={(e) => { e.preventDefault(); generate(a.assembly_no); }}>
+                          {busy === a.assembly_no ? 'Generating…' : 'Generate Credentials'}
+                        </button>
+                      </div>
                     )}
-                    <Link to={`/assemblies/${a.assembly_no}`}><button>Details</button></Link>
-                  </td>
-                </tr>
-              );
-            })}
-            {!loading && !filtered.length && <tr><td colSpan={7} className="muted" style={{ textAlign: 'center', padding: 18 }}>No assemblies.</td></tr>}
-          </tbody>
-        </table>
+                  </Link>
+                );
+              })}
+              {!filtered.length && <div className="muted" style={{ textAlign: 'center', padding: 24 }}>No assemblies found.</div>}
+            </div>
+          </>
+        )}
+
       </div>
     </div>
   );

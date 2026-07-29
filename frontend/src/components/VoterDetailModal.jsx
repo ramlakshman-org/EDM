@@ -64,24 +64,25 @@ export default function VoterDetailModal({ voter, onClose }) {
     { label: 'Pincode', value: get(['PINCODE', 'pincode', 'postal_code']) },
   ];
 
-  const lblStyle = {
+  const thStyle = {
     background: '#ffffff',
-    color: '#334155',
+    color: '#475569',
     fontWeight: 500,
     border: '1px solid #e2e8f0',
-    padding: '10px 14px',
-    width: '22%',
+    padding: '11px 14px',
+    width: '20%',
     fontSize: '13px',
+    textAlign: 'left',
     verticalAlign: 'middle',
   };
 
-  const valStyle = {
+  const tdStyle = {
     background: '#ffffff',
     color: '#0f172a',
-    fontWeight: 600,
+    fontWeight: 700,
     border: '1px solid #e2e8f0',
-    padding: '10px 14px',
-    width: '28%',
+    padding: '11px 14px',
+    width: '30%',
     fontSize: '13.5px',
     verticalAlign: 'middle',
     wordBreak: 'break-word',
@@ -89,41 +90,36 @@ export default function VoterDetailModal({ voter, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target.classList.contains('modal-overlay')) onClose(); }}>
-      <div className="modal-box" style={{ maxWidth: 880, width: '94%', borderRadius: 12, padding: 0, overflow: 'hidden' }}>
+      <div className="modal-box" style={{ maxWidth: 860, width: '96%', borderRadius: 12, padding: 0, overflow: 'hidden' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#fff' }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>{titleText}</h2>
-          <button className="modal-close" onClick={onClose} style={{ fontSize: 22, color: '#64748b', cursor: 'pointer', background: 'none', border: 'none' }}>×</button>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>{titleText}</h2>
+          <button className="modal-close" onClick={onClose} style={{ fontSize: 24, color: '#64748b', cursor: 'pointer', background: 'none', border: 'none', padding: '0 4px' }}>×</button>
         </div>
 
-        {/* Body Grid Table */}
-        <div style={{ padding: 20, maxHeight: '82vh', overflowY: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+        {/* Body Container with horizontal scroll for small mobile screens */}
+        <div style={{ padding: 16, maxHeight: '82vh', overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', minWidth: 540, borderCollapse: 'collapse', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
             <tbody>
-              {/* 2-column paired rows */}
               {twoColPairs.map((pair, idx) => (
                 <tr key={idx}>
-                  <td style={lblStyle}>{pair[0].label}</td>
-                  <td style={valStyle}>{pair[0].value}</td>
-                  <td style={lblStyle}>{pair[1].label}</td>
-                  <td style={valStyle}>{pair[1].value}</td>
+                  <th style={thStyle}>{pair[0].label}</th>
+                  <td style={tdStyle}>{pair[0].value}</td>
+                  <th style={thStyle}>{pair[1].label}</th>
+                  <td style={tdStyle}>{pair[1].value}</td>
                 </tr>
               ))}
-
-              {/* Full width rows (Section Name, Part Name, Polling Station EN & Tamil, etc.) */}
               {fullWidthRows.map((fw, idx) => (
                 <tr key={`fw-${idx}`}>
-                  <td style={lblStyle}>{fw.label}</td>
-                  <td colSpan={3} style={{ ...valStyle, width: '78%' }}>{fw.value}</td>
+                  <th style={thStyle}>{fw.label}</th>
+                  <td colSpan={3} style={{ ...tdStyle, width: '80%' }}>{fw.value}</td>
                 </tr>
               ))}
-
-              {/* Bottom pair (District & Pincode) */}
               <tr>
-                <td style={lblStyle}>{bottomPair[0].label}</td>
-                <td style={valStyle}>{bottomPair[0].value}</td>
-                <td style={lblStyle}>{bottomPair[1].label}</td>
-                <td style={valStyle}>{bottomPair[1].value}</td>
+                <th style={thStyle}>{bottomPair[0].label}</th>
+                <td style={tdStyle}>{bottomPair[0].value}</td>
+                <th style={thStyle}>{bottomPair[1].label}</th>
+                <td style={tdStyle}>{bottomPair[1].value}</td>
               </tr>
             </tbody>
           </table>

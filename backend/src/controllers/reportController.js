@@ -35,15 +35,33 @@ async function reportScope(req) {
   const u = req.user || {};
   const g = Number(u.group_id || 0);
   if (g === ROLES.SUPER_ADMIN || !g) {
-    return { forced: false, assemblyNo: req.query.assemblyId || '', booth: req.query.booth || '' };
+    return { forced: false, assemblyNo: req.query.assemblyId || '', booth: req.query.booth || '', booths: [] };
   }
   let rec = null;
   if (u.sub && u.sub !== 'admin') { try { rec = await findById(u.sub); } catch { /* offline */ } }
   const assemblyNo = rec?.assembly_id ?? u.assembly_id ?? '';
-  if (g === ROLES.BOOTH || g === ROLES.BOOTH_ALT) {
-    return { forced: true, assemblyNo, booth: rec?.booth_id ?? u.booth_id ?? '' };
+
+  let userBooths = Array.isArray(rec?.booths) && rec.booths.length > 0
+    ? rec.booths
+    : (Array.isArray(u.booths) && u.booths.length > 0 ? u.booths : []);
+
+  if (!userBooths.length && (rec?.mobile_no || u.mobile_no || u.username)) {
+    try {
+      const db = getAppDb();
+      const mob = (rec?.mobile_no || u.mobile_no || u.username || '').toString().replace(/\D/g, '');
+      if (mob) {
+        const enq = await db.collection('tbl_enquiry').findOne({ mobile: mob });
+        if (enq && Array.isArray(enq.booths) && enq.booths.length > 0) {
+          userBooths = enq.booths;
+        }
+      }
+    } catch { /* ignore */ }
   }
-  return { forced: true, assemblyNo, booth: req.query.booth || '' };
+
+  if (g === ROLES.BOOTH || g === ROLES.BOOTH_ALT) {
+    return { forced: true, assemblyNo, booth: rec?.booth_id ?? u.booth_id ?? '', booths: userBooths };
+  }
+  return { forced: true, assemblyNo, booth: req.query.booth || '', booths: userBooths };
 }
 
 // GET /reports/documents — role-scoped list of available HTML reports.
@@ -80,13 +98,14 @@ export async function assemblyAnalyticsReport(req, res) {
   try {
     let assembly = null;
     try { assembly = await getAssembly(no); } catch { /* app db offline */ }
-    const a = await assemblyAnalytics(no, scope.booth);
+    const a = await assemblyAnalytics(no, scope.booth, scope.booths);
     res.json({
       success: true,
       assembly_no: Number(no),
       assembly_name: assembly?.assembly_name || `Assembly ${no}`,
       district: assembly?.district || '-',
       booth: scope.booth || null,
+      user_booths: scope.booths || [],
       ...a,
     });
   } catch (e) {
@@ -142,7 +161,23 @@ export async function boothReport(req, res) {
     try { assembly = await getAssembly(assemblyId); } catch { /* app db offline */ }
     const db = getVoterDb();
     const coll = db.collection(collectionForAc(assemblyId));
-    const agg = await coll.aggregate([
+
+    const pipeline = [];
+    if (Array.isArray(scope.booths) && scope.booths.length > 0) {
+      const validParts = scope.booths
+        .map((p) => (typeof p === 'object' && p !== null ? parseInt(p.part_no, 10) : parseInt(p, 10)))
+        .filter((n) => !Number.isNaN(n));
+      if (validParts.length > 0) {
+        pipeline.push({ $match: { PART_NO: { $in: validParts } } });
+      }
+    } else if (scope.booth) {
+      const partNo = parseInt(scope.booth, 10);
+      if (!Number.isNaN(partNo)) {
+        pipeline.push({ $match: { PART_NO: partNo } });
+      }
+    }
+
+    pipeline.push(
       { $group: {
           _id: '$PART_NO',
           booth_name: { $first: '$BOOTH_NAME' },
@@ -150,8 +185,10 @@ export async function boothReport(req, res) {
           male: { $sum: { $cond: [{ $eq: ['$GENDER', 'Male'] }, 1, 0] } },
           female: { $sum: { $cond: [{ $eq: ['$GENDER', 'Female'] }, 1, 0] } },
       } },
-      { $sort: { _id: 1 } },
-    ]).toArray();
+      { $sort: { _id: 1 } }
+    );
+
+    const agg = await coll.aggregate(pipeline).toArray();
     const rows = agg
       .filter((r) => r._id !== null && r._id !== '')
       .map((r) => ({ part_no: r._id, booth_name: r.booth_name || '', total: r.total, male: r.male, female: r.female, other: r.total - r.male - r.female }));
@@ -163,6 +200,7 @@ export async function boothReport(req, res) {
       assembly_no: Number(assemblyId),
       assembly_name: assembly?.assembly_name || `Assembly ${assemblyId}`,
       district: assembly?.district || '-',
+      user_booths: scope.booths || [],
       totals, rows,
     });
   } catch (e) {

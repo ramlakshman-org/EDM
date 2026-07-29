@@ -37,13 +37,15 @@ export default function MlaList() {
         Elected members of the Tamil Nadu Legislative Assembly by constituency.
       </p>
       <div className="card">
-        <div className="row">
-          <div><label>Search</label>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="constituency / member / party" style={{ width: 280 }} />
+        <div className="row" style={{ alignItems: 'flex-end', gap: 12, marginBottom: 16 }}>
+          <div style={{ flex: 1, maxWidth: 320 }}><label>Search</label>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Constituency, member or party..." />
           </div>
-          <div className="muted" style={{ alignSelf: 'flex-end', paddingBottom: 6 }}>{rows.length} constituencies</div>
+          <div className="muted" style={{ fontWeight: 600, fontSize: 13, paddingBottom: 10 }}>{rows.length} constituencies</div>
         </div>
-        <div style={{ overflowX: 'auto' }}>
+
+        {/* Desktop Table View */}
+        <div className="mla-table-wrapper" style={{ overflowX: 'auto' }}>
           <table className="mla-table">
             <thead>
               <tr>
@@ -83,9 +85,45 @@ export default function MlaList() {
                   </tr>
                 );
               })}
-              {!rows.length && <tr><td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 18 }}>No matches.</td></tr>}
+              {!rows.length && <tr><td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 18 }}>No matches found.</td></tr>}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Cards View */}
+        <div className="mla-mobile-list">
+          {rows.map(([no, name, member, abbr], i) => {
+            const p = PARTIES[abbr] || { full: abbr };
+            const flagUrl = flagMap[abbr];
+            const photoUrl = profileMap[no];
+            return (
+              <div key={no} className="mla-card-item">
+                <div className="mla-card-avatar">
+                  {photoUrl ? (
+                    <img className="mla-photo-lg" src={photoUrl} alt={member} />
+                  ) : (
+                    <span className="mla-photo-lg placeholder">{member.charAt(0)}</span>
+                  )}
+                  <span className="mla-slno">#{i + 1}</span>
+                </div>
+                <div className="mla-card-info">
+                  <div className="mla-constituency">{no} - {name}</div>
+                  <div className="mla-member-name">{member}</div>
+                  <div className="mla-party-badge">
+                    {flagUrl ? (
+                      <img className="party-flag-sm" src={flagUrl} alt={abbr} />
+                    ) : (
+                      <span className="party-flag-sm placeholder">{abbr.slice(0, 3)}</span>
+                    )}
+                    <span className="party-text">
+                      <strong>{abbr}</strong> · {p.full}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {!rows.length && <div className="muted" style={{ textAlign: 'center', padding: 24 }}>No matches found.</div>}
         </div>
       </div>
     </div>

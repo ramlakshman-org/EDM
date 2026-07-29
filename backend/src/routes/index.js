@@ -17,16 +17,64 @@ import * as messaging from '../controllers/messagingController.js';
 import * as survey from '../controllers/surveyController.js';
 import * as flowImages from '../controllers/flowImageController.js';
 import * as ward from '../controllers/wardController.js';
+import * as whatsapp from '../controllers/whatsappController.js';
+import * as crm from '../controllers/crmController.js';
+import * as team from '../controllers/teamController.js';
+import * as templates from '../controllers/templateController.js';
 
 const r = Router();
 
 // ---- Public ----
 r.post('/auth/login', auth.login);
 r.post('/auth/register', auth.register);
+r.post('/payments/webhook', payments.razorpayWebhook);
+
+// WhatsApp Meta Webhook & Flow Endpoints (Public)
+r.get('/whatsapp/webhook', whatsapp.webhookVerification);
+r.post('/whatsapp/webhook', whatsapp.webhookHandler);
+r.get('/whatsapp-webhook', whatsapp.webhookVerification);
+r.post('/whatsapp-webhook', whatsapp.webhookHandler);
+r.post('/whatsapp-flow-endpoint', whatsapp.flowEndpoint);
+
+// Public Assembly & Booth Lookup for Registration
+r.get('/public/assemblies', assemblies.list);
+r.get('/public/booths', booths.boothsByAssembly);
 
 // ---- Protected (mirrors Laravel `adminauth` group) ----
 r.use(authRequired);
 r.get('/auth/me', auth.me);
+r.post('/auth/refresh', auth.refresh);
+
+// CRM Inbox & WhatsApp Messaging
+r.get('/crm/conversations', crm.listConversations);
+r.get('/crm/agents', crm.listAgents);
+r.post('/crm/distribute-leads', crm.distributeLeads);
+r.get('/crm/conversations/:phone', crm.getConversationHistory);
+r.post('/crm/conversations/:phone/status', crm.updateStatus);
+r.post('/crm/conversations/:phone/lead-status', crm.updateLeadStatus);
+r.post('/crm/conversations/:phone/notes', crm.updateLeadNotes);
+r.post('/crm/conversations/:phone/assign', crm.assignConversation);
+r.post('/crm/conversations/:phone/send-media', crm.sendMedia);
+r.post('/crm/conversations/:phone/react', crm.reactToMessage);
+r.delete('/crm/conversations/:phone/clear', crm.clearChat);
+r.post('/crm/messages/send', crm.sendMessage);
+r.post('/crm/send-credentials', crm.sendCredentials);
+r.post('/crm/send-flow', crm.sendFlow);
+
+// WhatsApp Message Templates (create / list / status / send)
+r.get('/crm/team-stats', crm.teamStats);
+r.get('/crm/team-report', crm.teamReport);
+r.get('/crm/templates', templates.list);
+r.post('/crm/templates', templates.create);
+r.post('/crm/templates/setup-defaults', templates.setupDefaults);
+r.post('/crm/conversations/:phone/send-template', templates.sendToContact);
+
+// CRM Team Management & Stats
+r.get('/team/members', team.listTeamMembers);
+r.post('/team/members', team.createTeamMember);
+r.put('/team/members/:id', team.updateTeamMember);
+r.delete('/team/members/:id', team.deleteTeamMember);
+r.get('/team/stats', team.getTeamStats);
 
 // Dashboard
 r.get('/dashboard/stats', dashboard.stats);
@@ -76,7 +124,12 @@ r.get('/registrations/:id', registrations.detail);
 r.put('/registrations/:id', registrations.update);
 r.get('/payments/subscriptions', payments.subscriptions);
 r.get('/payments/ledger', payments.payments);
+r.get('/payments/ward-pricing', payments.getWardPricingApi);
 r.post('/payments/order', payments.createOrder);
+r.post('/payments/ward-order', payments.createWardOrder);
+r.post('/payments/verify-ward-payment', payments.verifyWardPayment);
+r.get('/payments/check-paid', payments.checkPaid);
+r.post('/payments/check-order-status', payments.checkOrderStatus);
 r.get('/reports/booth', reports.boothReport);
 r.get('/reports/documents', reports.documents);
 r.get('/reports/booth-report-list', reports.boothReportList);
@@ -99,6 +152,8 @@ r.put('/survey/:id', survey.update);
 r.delete('/survey/:id', survey.remove);
 
 r.get('/flow-images', flowImages.list);
+r.get('/flow-images/messages', flowImages.getMessages);
+r.post('/flow-images/messages', flowImages.saveMessages);
 r.post('/flow-images/upload', flowImages.upload);
 r.delete('/flow-images/:id', flowImages.remove);
 

@@ -16,7 +16,7 @@ export default function Login() {
     setErr(''); setLoading(true);
     try {
       const res = await login(username, password);
-      if (res.success) nav(res.user?.home || '/dashboard');
+      if (res.success) nav(res.user?.home || '/dashboard', { replace: true });
       else setErr(res.message || 'Login failed.');
     } catch (e2) {
       setErr(e2.response?.data?.message || 'Login failed.');

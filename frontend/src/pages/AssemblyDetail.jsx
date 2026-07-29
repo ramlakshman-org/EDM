@@ -8,80 +8,138 @@ const fmt = (n) => Number(n || 0).toLocaleString('en-IN');
 export default function AssemblyDetail() {
   const { no } = useParams();
   const [d, setD] = useState(null);
+  const [cred, setCred] = useState(null);
   const [err, setErr] = useState('');
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({});
   const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const load = () =>
-    api.get(`/assemblies/${no}`).then(({ data }) => setD(data)).catch((e) => setErr(e.response?.data?.message || 'Failed.'));
+  const load = () => {
+    Promise.all([
+      api.get(`/assemblies/${no}`),
+      api.get('/assembly-credentials').catch(() => ({ data: { rows: [] } })),
+    ])
+      .then(([a, c]) => {
+        setD(a.data);
+        const found = (c.data.rows || []).find((r) => String(r.assembly_no) === String(no));
+        setCred(found || null);
+      })
+      .catch((e) => setErr(e.response?.data?.message || 'Failed to load details.'));
+  };
+
   useEffect(() => { load(); }, [no]);
 
-  const startEdit = () => {
-    const a = d.assembly;
-    setForm({
-      assembly_name: a.assembly_name || '', district: a.district || '',
-      total_voters: a.total_voters || 0, male_voters: a.male_voters || 0,
-      female_voters: a.female_voters || 0, third_gender_voters: a.third_gender_voters ?? a.other_voters ?? 0,
-    });
-    setEditing(true); setMsg('');
-  };
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  const save = async () => {
-    setMsg('');
+  const generate = async () => {
+    setErr(''); setMsg(''); setBusy(true);
     try {
-      const { data } = await api.put(`/assemblies/${no}`, form);
-      if (data.success) { setEditing(false); setMsg('Assembly updated.'); load(); }
-    } catch (e) { setMsg(e.response?.data?.message || 'Update failed.'); }
+      const { data } = await api.post(`/assembly-credentials/${no}/generate`);
+      if (data.success) {
+        setMsg(`Generated credentials for assembly ${no}: ${data.username} / ${data.passcode}`);
+        await load();
+      } else setErr(data.message || 'Generation failed.');
+    } catch (e) {
+      setErr(e.response?.data?.message || 'Generation failed.');
+    } finally { setBusy(false); }
   };
 
-  if (err) return <div className="alert err">{err}</div>;
-  if (!d) return <Spinner label="Loading…" />;
+  if (err) return <div><div className="alert err">{err}</div><Link to="/assemblies" className="btn-link">← Back to Assemblies</Link></div>;
+  if (!d) return <Spinner label="Loading assembly details…" />;
+
   const a = d.assembly;
+  const username = cred?.username || '-';
+  const passcode = cred?.passcode || '-';
+  const hasCred = username !== '-' && passcode !== '-';
 
   return (
     <div>
-      <Link to="/assemblies" className="muted">← Assemblies</Link>
-      <h1 style={{ marginTop: 6 }}>{a.assembly_no} — {a.assembly_name}</h1>
+      <div style={{ marginBottom: 12 }}>
+        <Link to="/assemblies" className="btn-link" style={{ fontSize: 14 }}>← Back to Assemblies</Link>
+      </div>
+      <h1 style={{ marginTop: 0 }}>Assembly #{a.assembly_no} — {a.assembly_name}</h1>
       {msg && <div className="alert warn">{msg}</div>}
 
-      <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0 }}>Stored counts (tbl_assembly_consitituency)</h2>
-          {!editing && <button onClick={startEdit}>Edit</button>}
+      {/* Login Credentials Card */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+          <h3 style={{ margin: 0 }}>Assembly Login Credentials</h3>
+          {!hasCred && (
+            <button className="success" disabled={busy} onClick={generate}>
+              {busy ? 'Generating…' : 'Generate Credentials'}
+            </button>
+          )}
         </div>
-        {!editing ? (
-          <table><tbody>
-            <tr><th>Total</th><td>{fmt(a.total_voters)}</td><th>Male</th><td>{fmt(a.male_voters)}</td></tr>
-            <tr><th>Female</th><td>{fmt(a.female_voters)}</td><th>Other</th><td>{fmt(a.third_gender_voters ?? a.other_voters)}</td></tr>
-            <tr><th>District</th><td>{a.district || '-'}</td><th>Collection</th><td>{a.table_name || `ass_${a.assembly_no}`}</td></tr>
-          </tbody></table>
-        ) : (
-          <div>
-            <div className="row">
-              <div><label>Name</label><input value={form.assembly_name} onChange={set('assembly_name')} /></div>
-              <div><label>District</label><input value={form.district} onChange={set('district')} /></div>
-            </div>
-            <div className="row">
-              <div><label>Total</label><input value={form.total_voters} onChange={set('total_voters')} /></div>
-              <div><label>Male</label><input value={form.male_voters} onChange={set('male_voters')} /></div>
-              <div><label>Female</label><input value={form.female_voters} onChange={set('female_voters')} /></div>
-              <div><label>Other</label><input value={form.third_gender_voters} onChange={set('third_gender_voters')} /></div>
-            </div>
-            <button onClick={save}>Save</button>{' '}
-            <button className="secondary" onClick={() => setEditing(false)}>Cancel</button>
+        <div className="ass-detail-grid">
+          <div className="ass-detail-kv">
+            <span className="lbl">Username</span>
+            <span className="val">{hasCred ? <strong>{username}</strong> : <span className="muted">Not generated</span>}</span>
           </div>
-        )}
+          <div className="ass-detail-kv">
+            <span className="lbl">Passcode</span>
+            <span className="val">
+              {hasCred ? (
+                <code style={{ background: '#e8f5e9', color: '#2e7d32', fontWeight: 700, padding: '4px 10px', borderRadius: 6, fontSize: 14 }}>
+                  {passcode}
+                </code>
+              ) : (
+                <span className="muted">Not generated</span>
+              )}
+            </span>
+          </div>
+        </div>
       </div>
 
+      {/* Assembly Info & Stored Counts Card */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Constituency Information &amp; Stored Counts</h3>
+        <div className="ass-detail-grid cols-3">
+          <div className="ass-detail-kv">
+            <span className="lbl">Total Voters</span>
+            <span className="val">{fmt(a.total_voters)}</span>
+          </div>
+          <div className="ass-detail-kv">
+            <span className="lbl">Male Voters</span>
+            <span className="val">{fmt(a.male_voters)}</span>
+          </div>
+          <div className="ass-detail-kv">
+            <span className="lbl">Female Voters</span>
+            <span className="val">{fmt(a.female_voters)}</span>
+          </div>
+          <div className="ass-detail-kv">
+            <span className="lbl">Other Voters</span>
+            <span className="val">{fmt(a.third_gender_voters ?? a.other_voters)}</span>
+          </div>
+          <div className="ass-detail-kv">
+            <span className="lbl">District</span>
+            <span className="val">{a.district || '-'}</span>
+          </div>
+          <div className="ass-detail-kv">
+            <span className="lbl">Collection Name</span>
+            <span className="val"><code>{a.table_name || `ass_${a.assembly_no}`}</code></span>
+          </div>
+        </div>
+      </div>
+
+      {/* Live Gender Counts Card */}
       <div className="card">
-        <h2>Live gender counts (from voter collection)</h2>
+        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Live Voter Database Counts</h3>
         {d.liveCounts ? (
-          <table><tbody>
-            <tr><th>Total</th><td>{fmt(d.liveCounts.total)}</td><th>Male</th><td>{fmt(d.liveCounts.male)}</td></tr>
-            <tr><th>Female</th><td>{fmt(d.liveCounts.female)}</td><th>Other</th><td>{fmt(d.liveCounts.other)}</td></tr>
-          </tbody></table>
+          <div className="ass-detail-grid cols-4">
+            <div className="ass-detail-kv">
+              <span className="lbl">Total Voters</span>
+              <span className="val">{fmt(d.liveCounts.total)}</span>
+            </div>
+            <div className="ass-detail-kv">
+              <span className="lbl">Male Voters</span>
+              <span className="val">{fmt(d.liveCounts.male)}</span>
+            </div>
+            <div className="ass-detail-kv">
+              <span className="lbl">Female Voters</span>
+              <span className="val">{fmt(d.liveCounts.female)}</span>
+            </div>
+            <div className="ass-detail-kv">
+              <span className="lbl">Other Voters</span>
+              <span className="val">{fmt(d.liveCounts.other)}</span>
+            </div>
+          </div>
         ) : <div className="alert warn">Voter database is unreachable — live counts unavailable.</div>}
       </div>
     </div>
