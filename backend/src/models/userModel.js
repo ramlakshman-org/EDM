@@ -1,15 +1,18 @@
+import bcrypt from 'bcryptjs';
 import { getAppDb } from '../config/db.js';
 import { toObjectId } from '../utils/objectId.js';
 import { escapeRegex } from '../utils/escapeRegex.js';
 
 const COLL = 'tbl_user';
 
-// Auth lookup: mobile_no / user_name / email + password_str (string or int), mirroring LoginController.
+// Auth lookup: find the user by identifier, then verify the password in code.
+// Prefers a bcrypt hash in `password`; for legacy rows that only have a plaintext
+// `password_str` it verifies plaintext once and transparently upgrades to bcrypt
+// (migration-on-login), so no existing user is locked out.
 export async function findByCredentials(loginInput, password) {
   const db = getAppDb();
   const cleanInput = String(loginInput || '').trim();
   const cleanMobile = cleanInput.replace(/\D/g, '').slice(-10);
-  const asInt = Number.isNaN(Number(password)) ? null : parseInt(password, 10);
 
   const queryOr = [
     { user_name: cleanInput },
@@ -20,15 +23,26 @@ export async function findByCredentials(loginInput, password) {
     queryOr.push({ mobile_no: cleanMobile });
   }
 
-  const passOr = [
-    { password_str: password },
-    ...(asInt !== null ? [{ password_str: asInt }] : []),
-  ];
+  const user = await db.collection(COLL).findOne({ $or: queryOr });
+  if (!user) return null;
 
-  return db.collection(COLL).findOne({
-    $or: queryOr,
-    $and: [{ $or: passOr }],
-  });
+  const pw = String(password ?? '');
+
+  // Preferred: bcrypt-hashed credential.
+  if (user.password && /^\$2[aby]\$/.test(String(user.password))) {
+    const ok = await bcrypt.compare(pw, String(user.password));
+    return ok ? user : null;
+  }
+
+  // Legacy plaintext (`password_str` may be a string or an integer). On a
+  // successful match, hash it into `password` so plaintext is phased out.
+  const stored = user.password_str;
+  if (stored == null || String(stored) !== pw) return null;
+  try {
+    const hash = await bcrypt.hash(pw, 10);
+    await db.collection(COLL).updateOne({ _id: user._id }, { $set: { password: hash } });
+  } catch { /* migration is best-effort; login still succeeds */ }
+  return user;
 }
 
 export async function nextUserId() {

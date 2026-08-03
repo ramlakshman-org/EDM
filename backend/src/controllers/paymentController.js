@@ -5,8 +5,9 @@ import { findById, updateUser } from '../models/userModel.js';
 const RAZORPAY_KEY = process.env.RAZORPAY_KEY;
 const RAZORPAY_SECRET = process.env.RAZORPAY_SECRET;
 
-// Test user override — this mobile always pays ₹1 with no GST (for all tiers)
-const TEST_MOBILE = '8106811285';
+// Timeout wrapper for outbound Razorpay calls (avoids hung workers on outages).
+const _fetch = globalThis.fetch;
+const fetch = (url, opts = {}) => _fetch(url, { signal: AbortSignal.timeout(15000), ...opts });
 
 // Calculate Ward subscription pricing based on booth count:
 //   - 1 Booth: 2,000 + 18% GST (360) = 2,360
@@ -15,19 +16,6 @@ const TEST_MOBILE = '8106811285';
 //   - Above 25 Booths: 25,000 + 18% GST (4,500) = 29,500
 export function calculateWardPricing(boothCount = 1, mobile = '') {
   const count = Math.max(1, parseInt(boothCount, 10) || 1);
-
-  // Test override: ₹1, no GST for all tiers
-  if (String(mobile).replace(/\D/g, '') === TEST_MOBILE) {
-    return {
-      boothCount: count,
-      basePrice: 1,
-      gst: 0,
-      gstRate: '0%',
-      totalAmount: 1,
-      amountPaise: 100,
-      tierLabel: 'Test Tier (₹1)',
-    };
-  }
 
   let basePrice = 2000;
   let tierLabel = '1 Booth Tier';
@@ -103,10 +91,23 @@ export async function checkPaid(req, res) {
 export async function subscriptions(req, res) {
   try {
     const db = getAppDb();
-    const [users, assemblies, payments] = await Promise.all([
-      db.collection('tbl_user').find({ paid_status: 'Yes', user_group_id: { $in: [3, 6] } }).sort({ updated_at: -1 }).toArray(),
+    // Pagination with a hard ceiling to avoid loading the whole collection.
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 100);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+
+    const users = await db.collection('tbl_user')
+      .find({ paid_status: 'Yes', user_group_id: { $in: [3, 6] } })
+      .sort({ updated_at: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .toArray();
+
+    // Only fetch the payment records for the users on this page.
+    const userIds = users.map((u) => String(u._id));
+    const txnIds = users.map((u) => String(u.transaction_id)).filter(Boolean);
+    const [assemblies, payments] = await Promise.all([
       db.collection('tbl_assembly_consitituency').find({}).toArray(),
-      db.collection('tbl_payment').find({}).toArray(),
+      db.collection('tbl_payment').find({ $or: [{ user_id: { $in: userIds } }, { payment_id: { $in: txnIds } }] }).toArray(),
     ]);
 
     const mobiles = users.map((u) => u.mobile_no).filter(Boolean);
@@ -133,7 +134,7 @@ export async function subscriptions(req, res) {
       }
 
       const rawAmount = p
-        ? (u.mobile_no === TEST_MOBILE || Number(p.amount) === 100 || Number(p.amount) === 1 ? 1 : (Number(p.amount) > 1000 ? Number(p.amount) / 100 : Number(p.amount)))
+        ? (Number(p.amount) === 100 || Number(p.amount) === 1 ? 1 : (Number(p.amount) > 1000 ? Number(p.amount) / 100 : Number(p.amount)))
         : (isWard ? 2360 : 25000);
 
       const cleanMob = String(u.mobile_no || '').replace(/\D/g, '');
@@ -161,7 +162,7 @@ export async function subscriptions(req, res) {
       };
     });
 
-    res.json({ success: true, subscriptions: rows });
+    res.json({ success: true, subscriptions: rows, page, limit });
   } catch (e) {
     if (e.message === 'APP_DB_OFFLINE') return res.status(503).json({ success: false, message: 'App database unavailable.' });
     res.status(500).json({ success: false, message: e.message });
@@ -172,8 +173,12 @@ export async function subscriptions(req, res) {
 export async function payments(req, res) {
   try {
     const db = getAppDb();
-    const rows = await db.collection('tbl_payment').find({}).sort({ created_at: -1 }).limit(500).toArray();
-    res.json({ success: true, payments: rows });
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 100);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const rows = await db.collection('tbl_payment')
+      .find({}).sort({ created_at: -1 })
+      .skip((page - 1) * limit).limit(limit).toArray();
+    res.json({ success: true, payments: rows, page, limit });
   } catch (e) {
     if (e.message === 'APP_DB_OFFLINE') return res.status(503).json({ success: false, message: 'App database unavailable.' });
     res.status(500).json({ success: false, message: e.message });
@@ -548,7 +553,7 @@ export async function checkOrderStatus(req, res) {
           booth_count: pricing.boothCount,
           base_amount: pricing.basePrice,
           gst_amount: pricing.gst,
-          amount: (mobile === TEST_MOBILE || amountPaise === 100) ? 1 : (amountPaise > 1000 ? Math.round(amountPaise / 100) : amountPaise),
+          amount: (amountPaise === 100) ? 1 : (amountPaise > 1000 ? Math.round(amountPaise / 100) : amountPaise),
           currency: 'INR',
           status: 'Paid',
           source: 'order-poll',

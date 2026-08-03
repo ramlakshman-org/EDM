@@ -24,7 +24,8 @@ export function AuthProvider({ children }) {
   const login = async (username, password) => {
     const { data } = await api.post('/auth/login', { username, password });
     if (data.success) {
-      localStorage.setItem('edm_token', data.token);
+      // The JWT now lives in an HttpOnly cookie set by the server — not in
+      // localStorage. We only persist non-sensitive user info for the UI.
       localStorage.setItem('edm_user', JSON.stringify(data.user));
       localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
       setUser(data.user);
@@ -71,9 +72,8 @@ export function AuthProvider({ children }) {
       const now = Date.now();
       if (now - lastRefresh.current < REFRESH_THROTTLE_MS) return;
       lastRefresh.current = now;
-      api.post('/auth/refresh')
-        .then(({ data }) => { if (data?.success && data.token) localStorage.setItem('edm_token', data.token); })
-        .catch(() => { /* 401 handled by the response interceptor */ });
+      // Refresh slides the HttpOnly auth cookie server-side; nothing to store here.
+      api.post('/auth/refresh').catch(() => { /* 401 handled by the response interceptor */ });
     };
 
     const onActivity = () => {
@@ -99,9 +99,9 @@ export function AuthProvider({ children }) {
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('focus', checkIdle);
 
-    // Cross-tab: if the token is cleared in another tab, drop this tab too.
+    // Cross-tab: if the user is cleared in another tab (logout), drop this tab too.
     const onStorage = (ev) => {
-      if (ev.key === 'edm_token' && !ev.newValue) setUser(null);
+      if (ev.key === 'edm_user' && !ev.newValue) setUser(null);
     };
     window.addEventListener('storage', onStorage);
 

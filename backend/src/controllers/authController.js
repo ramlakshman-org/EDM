@@ -4,6 +4,20 @@ import { findByCredentials, nextUserId, existsByMobile, insertUser, blankUser, f
 import { isAppDbOnline, getAppDb } from '../config/db.js';
 import { ROLES, ROLE_NAME, roleHome } from '../constants/roles.js';
 
+// Set the JWT as an HttpOnly cookie so it can't be read/stolen by JavaScript
+// (XSS). Secure in production; SameSite=Strict since the SPA and API share an
+// origin. A token is still returned in the JSON body for backward compatibility.
+const AUTH_COOKIE_MAX_AGE = 40 * 60 * 1000; // aligns with JWT TTL
+function setAuthCookie(res, token) {
+  res.cookie('edm_token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: AUTH_COOKIE_MAX_AGE,
+    path: '/',
+  });
+}
+
 // Mirrors LoginController@submitLogin: match tbl_user by mobile_no + password_str,
 // then route by user_group_id. Keeps an admin/admin bootstrap for first use.
 export async function login(req, res) {
@@ -13,12 +27,20 @@ export async function login(req, res) {
     return res.status(400).json({ success: false, message: 'Username and password are required.' });
   }
 
-  // Bootstrap super admin (works even with no app DB / no users yet)
-  if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+  // Bootstrap super admin (emergency access even with no app DB / no users yet).
+  // Only enabled when a STRONG, non-default admin password is configured — the
+  // old `admin`/`admin` default is rejected so it can't be used as a backdoor.
+  const bootUser = process.env.ADMIN_USERNAME;
+  const bootPass = process.env.ADMIN_PASSWORD;
+  const bootstrapEnabled = !!bootUser && !!bootPass && bootPass.length >= 12
+    && bootPass.toLowerCase() !== 'admin' && bootUser.toLowerCase() !== 'admin';
+  if (bootstrapEnabled && username === bootUser && password === bootPass) {
     const claims = { sub: 'admin', name: 'Super Admin', group_id: ROLES.SUPER_ADMIN };
+    const token = signToken(claims);
+    setAuthCookie(res, token);
     return res.json({
       success: true,
-      token: signToken(claims),
+      token,
       user: { name: 'Super Admin', group_id: ROLES.SUPER_ADMIN, role: 'Super Admin', home: roleHome(ROLES.SUPER_ADMIN) },
     });
   }
@@ -50,9 +72,11 @@ export async function login(req, res) {
       ward_id: user.ward_id ?? null,
       mobile: String(user.mobile_no || '').replace(/\D/g, ''),
     };
+    const token = signToken(claims);
+    setAuthCookie(res, token);
     return res.json({
       success: true,
-      token: signToken(claims),
+      token,
       user: {
         name: claims.name,
         first_name: user.first_name || claims.name,
@@ -135,7 +159,7 @@ export async function register(req, res) {
       const id = (await maxUserId()) + 1;
       await db.collection('tbl_user').insertOne({
         ...blankUser(), id, user_group_id: assignedGroupId,
-        first_name: fullName, mobile_no: mobile, password_str: passcode,
+        first_name: fullName, mobile_no: mobile, password_str: passcode, password: await bcrypt.hash(passcode, 10),
         district_id: district, category_name: localBody, ward_id: cleanWard,
         candidate_type: bodyType, position, is_user_login: true,
         assembly_id: assemblyId, assembly_name: assemblyName,
@@ -144,7 +168,7 @@ export async function register(req, res) {
     } else {
       await db.collection('tbl_user').updateOne({ mobile_no: mobile }, { $set: {
         user_group_id: assignedGroupId,
-        password_str: passcode, district_id: district, category_name: localBody,
+        password_str: passcode, password: await bcrypt.hash(passcode, 10), district_id: district, category_name: localBody,
         ward_id: cleanWard, candidate_type: bodyType, position, first_name: fullName,
         assembly_id: assemblyId, assembly_name: assemblyName,
         booths: boothObjects,
@@ -207,7 +231,9 @@ export async function refresh(req, res) {
   delete claims.exp;
   delete claims.nbf;
   delete claims.jti;
-  return res.json({ success: true, token: signToken(claims) });
+  const token = signToken(claims);
+  setAuthCookie(res, token);
+  return res.json({ success: true, token });
 }
 
 // POST /auth/logout — revoke the current token server-side so it can't be reused
@@ -218,5 +244,6 @@ export async function logout(req, res) {
   } catch (e) {
     // best-effort; the client clears its token regardless
   }
+  res.clearCookie('edm_token', { path: '/' });
   return res.json({ success: true });
 }

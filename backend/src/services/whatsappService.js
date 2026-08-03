@@ -1,4 +1,7 @@
-const fetch = globalThis.fetch;
+// Wrap fetch so every outbound Meta Graph call has a timeout — an upstream
+// stall can't hang a worker indefinitely.
+const _fetch = globalThis.fetch;
+const fetch = (url, opts = {}) => _fetch(url, { signal: AbortSignal.timeout(20000), ...opts });
 
 function formatPhoneForWhatsApp(to) {
   let phone = String(to || '').replace(/\D/g, '');

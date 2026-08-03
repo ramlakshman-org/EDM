@@ -4,6 +4,11 @@
 // Each function only calls out when its keys are configured in .env; otherwise
 // it returns { configured: false } so callers can respond 501 without side effects.
 
+// Outbound gateway calls get a timeout so an upstream (Obligr/Meta) outage
+// can't hang a worker thread indefinitely.
+const _fetch = globalThis.fetch;
+const fetch = (url, opts = {}) => _fetch(url, { signal: AbortSignal.timeout(15000), ...opts });
+
 export function smsConfigured() {
   return !!process.env.OBLIGR_TOKEN;
 }

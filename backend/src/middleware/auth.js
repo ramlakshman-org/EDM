@@ -1,8 +1,23 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { getAppDb, isAppDbOnline } from '../config/db.js';
+import { ROLES } from '../constants/roles.js';
 
 const DENYLIST_COLL = 'tbl_token_denylist';
+
+// Role gate. Super Admin (group 1) always passes; otherwise the caller's
+// group_id must be in the allowed list. Use after `authRequired`.
+export function requireRole(...allowedGroups) {
+  const allowed = allowedGroups.map(Number);
+  return (req, res, next) => {
+    const g = Number(req.user?.group_id);
+    if (g === ROLES.SUPER_ADMIN || allowed.includes(g)) return next();
+    return res.status(403).json({ success: false, message: 'You do not have permission to perform this action.' });
+  };
+}
+
+// Convenience: Super-Admin-only access.
+export const adminOnly = requireRole(ROLES.SUPER_ADMIN);
 
 export function signToken(payload) {
   // Each token carries a unique id (jti) so it can be individually revoked on
@@ -24,10 +39,19 @@ export async function revokeToken(jti, expSeconds) {
   await col.updateOne({ jti }, { $set: { jti, expireAt } }, { upsert: true });
 }
 
+// Extract the JWT from the HttpOnly cookie (preferred) or the Authorization
+// header (backward-compatible). No cookie-parser dependency needed.
+export function tokenFromRequest(req) {
+  const header = req.headers.authorization || '';
+  if (header.startsWith('Bearer ')) return header.slice(7);
+  const cookie = req.headers.cookie || '';
+  const m = cookie.match(/(?:^|;\s*)edm_token=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 // Mirrors the Laravel `adminauth` middleware — protects the admin API.
 export async function authRequired(req, res, next) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  const token = tokenFromRequest(req);
   if (!token) return res.status(401).json({ success: false, message: 'Not authenticated.' });
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);

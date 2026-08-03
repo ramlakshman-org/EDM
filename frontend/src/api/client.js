@@ -1,18 +1,13 @@
 import axios from 'axios';
 
-const api = axios.create({ baseURL: '/api' });
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('edm_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+// Auth is carried by an HttpOnly cookie set by the backend (not readable by JS,
+// so it can't be stolen via XSS). withCredentials ensures the cookie is sent.
+const api = axios.create({ baseURL: '/api', withCredentials: true });
 
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('edm_token');
       localStorage.removeItem('edm_user');
       localStorage.removeItem('edm_last_active');
       if (!location.pathname.startsWith('/login')) location.href = '/login';

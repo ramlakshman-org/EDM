@@ -55,7 +55,7 @@ function toFlagThumbUrl(url) {
 }
 
 async function fetchImageBase64(url) {
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
   if (!res.ok) throw new Error(`image fetch failed: HTTP ${res.status}`);
   const buf = Buffer.from(await res.arrayBuffer());
   return buf.toString('base64');

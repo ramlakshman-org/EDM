@@ -24,7 +24,7 @@ app.use(helmet({
 
 // CORS — restrict to the configured client origin (no wildcard fallback).
 const clientOrigin = process.env.CLIENT_ORIGIN || 'https://election2026sir.in';
-app.use(cors({ origin: clientOrigin }));
+app.use(cors({ origin: clientOrigin, credentials: true }));
 
 // Capture the raw body so webhook HMAC signatures (Razorpay, Meta) can be
 // verified against the exact bytes that were signed.
@@ -59,7 +59,24 @@ app.use((req, res) => res.status(404).json({ success: false, message: 'Route not
 
 const PORT = process.env.PORT || 5000;
 
+// Fail fast if critical configuration is missing or left at insecure defaults,
+// rather than booting a mis-configured / insecure server.
+function validateEnv() {
+  const missing = ['JWT_SECRET', 'MONGO_APP_URL', 'MONGO_VOTER_URL'].filter((k) => !process.env[k]);
+  if (missing.length) {
+    console.error(`[edm] FATAL: missing required environment variables: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+  const secret = process.env.JWT_SECRET;
+  const weak = secret === 'change-this-to-a-long-random-string' || secret.length < 16;
+  if (weak && process.env.NODE_ENV === 'production') {
+    console.error('[edm] FATAL: JWT_SECRET is the placeholder or too short. Set a strong secret (>=16 chars).');
+    process.exit(1);
+  }
+}
+
 (async () => {
+  validateEnv();
   await connectDbs();
   const server = app.listen(PORT, () => console.log(`[edm] API listening on http://localhost:${PORT}`));
   const shutdown = async () => { await closeDbs(); server.close(() => process.exit(0)); };

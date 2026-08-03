@@ -3,6 +3,10 @@ import crypto from 'crypto';
 // Port of app/Services/CloudinaryService.php — signed server-side upload/delete.
 // Uses global fetch/FormData/Blob (Node 18+).
 
+// Timeout wrapper (uploads/deletes) so a Cloudinary stall can't hang a worker.
+const _fetch = globalThis.fetch;
+const fetch = (url, opts = {}) => _fetch(url, { signal: AbortSignal.timeout(30000), ...opts });
+
 function creds() {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   const apiKey = process.env.CLOUDINARY_API_KEY;

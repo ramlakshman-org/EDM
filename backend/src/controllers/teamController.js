@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import { getAppDb } from '../config/db.js';
 import { toObjectId } from '../utils/objectId.js';
 import { ROLES } from '../constants/roles.js';
@@ -163,6 +164,7 @@ export async function createTeamMember(req, res) {
       mobile_no: cleanMobile || cleanUsername,
       email: `${cleanUsername}@edm.local`,
       password_str: String(password).trim(),
+      password: await bcrypt.hash(String(password).trim(), 10),
       is_active: 1,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -212,7 +214,10 @@ export async function updateTeamMember(req, res) {
     }
     if (username) updateDoc.user_name = String(username).trim();
     if (mobile) updateDoc.mobile_no = String(mobile).replace(/\D/g, '').slice(-10);
-    if (password) updateDoc.password_str = String(password).trim();
+    if (password) {
+      updateDoc.password_str = String(password).trim();
+      updateDoc.password = await bcrypt.hash(String(password).trim(), 10);
+    }
     if (typeof is_active !== 'undefined') updateDoc.is_active = is_active ? 1 : 0;
 
     await db.collection('tbl_user').updateOne({ _id: oid }, { $set: updateDoc });

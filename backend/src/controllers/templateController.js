@@ -14,7 +14,7 @@ async function headerHandleFromAsset(db, key) {
   const asset = await db.collection('app_flow_images').findOne({ key });
   if (!asset?.url) return null;
   const url = String(asset.url).replace(/^http:\/\//, 'https://');
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
   if (!res.ok) return null;
   const buf = Buffer.from(await res.arrayBuffer());
   const mime = res.headers.get('content-type') || (asset.type === 'video' ? 'video/mp4' : 'image/jpeg');

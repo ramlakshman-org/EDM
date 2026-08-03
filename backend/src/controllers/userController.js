@@ -19,7 +19,7 @@ export async function list(req, res) {
         _id: u._id, id: u.id, name: u.first_name, mobile_no: u.mobile_no, email: u.email,
         group_id: u.user_group_id, role: ROLE_NAME[u.user_group_id] || 'User',
         assembly_id: u.assembly_id, booth_id: u.booth_id, ward_id: u.ward_id,
-        passcode: u.password_str, paid_status: u.paid_status, is_active: u.is_active,
+        paid_status: u.paid_status, is_active: u.is_active,
       })),
     });
   } catch (e) {
@@ -61,13 +61,40 @@ export async function create(req, res) {
   }
 }
 
+// Whitelist of fields a normal update may modify — prevents mass-assignment
+// privilege escalation (e.g. a client sending user_group_id: 1).
+const USER_UPDATABLE_FIELDS = [
+  'first_name', 'last_name', 'email', 'mobile_no', 'assembly_id', 'assembly_no',
+  'booth_id', 'ward_id', 'candidate_party', 'candidate_type', 'position',
+  'paid_status', 'is_active', 'district_id', 'category_name',
+];
+
 export async function update(req, res) {
   try {
-    const b = { ...req.body };
-    if (b.name) { b.first_name = b.name; delete b.name; }
-    if (b.group_id) { b.user_group_id = parseInt(b.group_id, 10); delete b.group_id; }
-    if (b.password) { b.password_str = b.password; b.password = await bcrypt.hash(b.password, 10); }
-    const user = await updateUser(req.params.id, b);
+    const body = req.body || {};
+    const isSuperAdmin = Number(req.user?.group_id) === 1;
+
+    const patch = {};
+    if (body.name !== undefined) patch.first_name = body.name;
+    for (const k of USER_UPDATABLE_FIELDS) {
+      if (body[k] !== undefined) patch[k] = body[k];
+    }
+
+    // Role assignment is privileged: only a Super Admin may change the group.
+    if (body.group_id !== undefined || body.user_group_id !== undefined) {
+      if (!isSuperAdmin) {
+        return res.status(403).json({ success: false, message: 'Not authorized to change user role.' });
+      }
+      patch.user_group_id = parseInt(body.group_id ?? body.user_group_id, 10);
+    }
+
+    // Password change: store bcrypt hash; keep displayable passcode in sync.
+    if (body.password) {
+      patch.password_str = String(body.password);
+      patch.password = await bcrypt.hash(String(body.password), 10);
+    }
+
+    const user = await updateUser(req.params.id, patch);
     res.json({ success: true, user });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });

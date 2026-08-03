@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { authRequired } from '../middleware/auth.js';
+import { authRequired, adminOnly } from '../middleware/auth.js';
 import * as auth from '../controllers/authController.js';
 import * as dashboard from '../controllers/dashboardController.js';
 import * as voters from '../controllers/voterController.js';
@@ -80,12 +80,12 @@ r.post('/crm/templates', templates.create);
 r.post('/crm/templates/setup-defaults', templates.setupDefaults);
 r.post('/crm/conversations/:phone/send-template', templates.sendToContact);
 
-// CRM Team Management & Stats
-r.get('/team/members', team.listTeamMembers);
-r.post('/team/members', team.createTeamMember);
-r.put('/team/members/:id', team.updateTeamMember);
-r.delete('/team/members/:id', team.deleteTeamMember);
-r.get('/team/stats', team.getTeamStats);
+// CRM Team Management & Stats (Super Admin only)
+r.get('/team/members', adminOnly, team.listTeamMembers);
+r.post('/team/members', adminOnly, team.createTeamMember);
+r.put('/team/members/:id', adminOnly, team.updateTeamMember);
+r.delete('/team/members/:id', adminOnly, team.deleteTeamMember);
+r.get('/team/stats', adminOnly, team.getTeamStats);
 
 // Dashboard
 r.get('/dashboard/stats', dashboard.stats);
@@ -100,41 +100,41 @@ r.get('/voters/detail', voters.detail);
 // Assemblies
 r.get('/assemblies', assemblies.list);
 r.get('/assemblies/:no', assemblies.detail);
-r.put('/assemblies/:no', assemblies.update);
+r.put('/assemblies/:no', adminOnly, assemblies.update);
 
 // Booths
 r.get('/booths', booths.boothsByAssembly);
 
-// Per-assembly MLA credentials (used by the Assembly List page)
-r.get('/assembly-credentials', users.assemblyCredentials);
-r.post('/assembly-credentials/:no/generate', users.generateCredentials);
+// Per-assembly MLA credentials (Super Admin only — exposes/creates login secrets)
+r.get('/assembly-credentials', adminOnly, users.assemblyCredentials);
+r.post('/assembly-credentials/:no/generate', adminOnly, users.generateCredentials);
 
 // MLA images — profile photos (per constituency) + party flags (per party)
 r.get('/mla/images', mla.list);
-r.post('/mla/profile-upload', mla.uploadProfile);
-r.post('/mla/flag-upload', mla.uploadFlag);
-r.delete('/mla/profile/:no', mla.removeProfile);
-r.delete('/mla/flag/:party', mla.removeFlag);
+r.post('/mla/profile-upload', adminOnly, mla.uploadProfile);
+r.post('/mla/flag-upload', adminOnly, mla.uploadFlag);
+r.delete('/mla/profile/:no', adminOnly, mla.removeProfile);
+r.delete('/mla/flag/:party', adminOnly, mla.removeFlag);
 
-// Assembly-wise / Booth-wise login generation (mirrors AssemblyController)
-r.get('/booth-logins', boothLogins.list);
-r.post('/booth-logins/generate', boothLogins.generate);
+// Assembly-wise / Booth-wise login generation (Super Admin only)
+r.get('/booth-logins', adminOnly, boothLogins.list);
+r.post('/booth-logins/generate', adminOnly, boothLogins.generate);
 
-// Ward-wise logins (mirrors UserManagementController@wardLogins*)
-r.get('/ward-logins', wardLogins.list);
-r.post('/ward-logins', wardLogins.store);
-r.post('/ward-logins/:id/add-booth', wardLogins.addBooth);
-r.post('/ward-logins/:id/delete-booth', wardLogins.deleteBooth);
-r.post('/ward-logins/:id/save-booths', wardLogins.saveBooths);
-r.post('/ward-logins/check-exists', wardLogins.checkExists);
-r.delete('/ward-logins/:id', wardLogins.remove);
+// Ward-wise logins management (Super Admin only)
+r.get('/ward-logins', adminOnly, wardLogins.list);
+r.post('/ward-logins', adminOnly, wardLogins.store);
+r.post('/ward-logins/:id/add-booth', adminOnly, wardLogins.addBooth);
+r.post('/ward-logins/:id/delete-booth', adminOnly, wardLogins.deleteBooth);
+r.post('/ward-logins/:id/save-booths', adminOnly, wardLogins.saveBooths);
+r.post('/ward-logins/check-exists', adminOnly, wardLogins.checkExists);
+r.delete('/ward-logins/:id', adminOnly, wardLogins.remove);
 
-// Registrations, Payments/Subscriptions, Reports
-r.get('/registrations', registrations.list);
-r.get('/registrations/:id', registrations.detail);
-r.put('/registrations/:id', registrations.update);
-r.get('/payments/subscriptions', payments.subscriptions);
-r.get('/payments/ledger', payments.payments);
+// Registrations (Super Admin only — candidate PII), Payments ledgers, Reports
+r.get('/registrations', adminOnly, registrations.list);
+r.get('/registrations/:id', adminOnly, registrations.detail);
+r.put('/registrations/:id', adminOnly, registrations.update);
+r.get('/payments/subscriptions', adminOnly, payments.subscriptions);
+r.get('/payments/ledger', adminOnly, payments.payments);
 r.get('/payments/ward-pricing', payments.getWardPricingApi);
 r.post('/payments/order', payments.createOrder);
 r.post('/payments/ward-order', payments.createWardOrder);
@@ -149,24 +149,24 @@ r.get('/reports/assembly-analytics', reports.assemblyAnalyticsReport);
 // Phase 5 — Mobile-app CMS (generic CRUD over 13 content collections)
 r.get('/mobileapp/types', cms.types);
 r.get('/mobileapp/:type', cms.list);
-r.post('/mobileapp/:type', cms.create);
+r.post('/mobileapp/:type', adminOnly, cms.create);
 r.get('/mobileapp/:type/:id', cms.get);
-r.put('/mobileapp/:type/:id', cms.update);
-r.delete('/mobileapp/:type/:id', cms.remove);
+r.put('/mobileapp/:type/:id', adminOnly, cms.update);
+r.delete('/mobileapp/:type/:id', adminOnly, cms.remove);
 
 // Messaging reports — used by the Ward "Social Media Reports" page (tbl_sms_report).
 r.get('/messaging/reports', messaging.reports);
 
 r.get('/survey', survey.list);
-r.post('/survey', survey.create);
-r.put('/survey/:id', survey.update);
-r.delete('/survey/:id', survey.remove);
+r.post('/survey', adminOnly, survey.create);
+r.put('/survey/:id', adminOnly, survey.update);
+r.delete('/survey/:id', adminOnly, survey.remove);
 
 r.get('/flow-images', flowImages.list);
 r.get('/flow-images/messages', flowImages.getMessages);
-r.post('/flow-images/messages', flowImages.saveMessages);
-r.post('/flow-images/upload', flowImages.upload);
-r.delete('/flow-images/:id', flowImages.remove);
+r.post('/flow-images/messages', adminOnly, flowImages.saveMessages);
+r.post('/flow-images/upload', adminOnly, flowImages.upload);
+r.delete('/flow-images/:id', adminOnly, flowImages.remove);
 
 // Ward-wise login home (sample/preview vs assigned booths) + social-media requests
 r.get('/ward/home', ward.home);
