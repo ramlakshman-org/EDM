@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { signToken } from '../middleware/auth.js';
+import { signToken, revokeToken } from '../middleware/auth.js';
 import { findByCredentials, nextUserId, existsByMobile, insertUser, blankUser, findWardMainAdmin, maxUserId } from '../models/userModel.js';
 import { isAppDbOnline, getAppDb } from '../config/db.js';
 import { ROLES, ROLE_NAME, roleHome } from '../constants/roles.js';
@@ -202,9 +202,21 @@ export async function me(req, res) {
 // alive. Re-issues a fresh token from the already-verified claims.
 export async function refresh(req, res) {
   const claims = { ...(req.user || {}) };
-  // Drop JWT-managed fields so signToken can set fresh iat/exp.
+  // Drop JWT-managed fields so signToken can set fresh iat/exp/jti.
   delete claims.iat;
   delete claims.exp;
   delete claims.nbf;
+  delete claims.jti;
   return res.json({ success: true, token: signToken(claims) });
+}
+
+// POST /auth/logout — revoke the current token server-side so it can't be reused
+// even before it expires.
+export async function logout(req, res) {
+  try {
+    await revokeToken(req.user?.jti, req.user?.exp);
+  } catch (e) {
+    // best-effort; the client clears its token regardless
+  }
+  return res.json({ success: true });
 }

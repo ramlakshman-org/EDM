@@ -1,5 +1,6 @@
 import { getVoterDb } from '../config/db.js';
 import { toObjectId } from '../utils/objectId.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 
 export const collectionForAc = (acNo) => `ass_${parseInt(acNo, 10)}`;
 
@@ -30,14 +31,15 @@ function buildQuery({ min_age, max_age, boothId, partNos, gender, has_mobile, se
     const hasSpace = /\s/.test(term);
     if (hasLetter && hasDigit && !hasSpace) {
       const epic = term.toUpperCase();
-      q.EPIC_NO = /^[A-Z]{1,4}[0-9]{5,9}$/.test(epic) ? epic : { $regex: '^' + epic };
+      q.EPIC_NO = /^[A-Z]{1,4}[0-9]{5,9}$/.test(epic) ? epic : { $regex: '^' + escapeRegex(epic) };
     } else if (hasDigit && !hasLetter && !hasSpace) {
-      q.MOBILE_NUMBER = { $regex: '^' + term };
+      q.MOBILE_NUMBER = { $regex: '^' + escapeRegex(term) };
     } else {
+      const safe = escapeRegex(term);
       q.$or = [
-        { VOTER_NAME_EN: { $regex: term, $options: 'i' } },
-        { VOTER_NAME: { $regex: term } },
-        { RELATION_NAME_EN: { $regex: term, $options: 'i' } },
+        { VOTER_NAME_EN: { $regex: safe, $options: 'i' } },
+        { VOTER_NAME: { $regex: safe } },
+        { RELATION_NAME_EN: { $regex: safe, $options: 'i' } },
       ];
     }
   }

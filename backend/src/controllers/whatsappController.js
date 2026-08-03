@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { getAppDb, getVoterDb } from '../config/db.js';
 import { sendText, sendFlowMessage, sendUrlButtonMessage, getMediaInfo, downloadMediaBytes } from '../services/whatsappService.js';
 import * as cloudinary from '../services/cloudinaryService.js';
@@ -772,8 +773,31 @@ async function processIncomingMedia(message) {
  */
 export async function webhookHandler(req, res) {
   try {
+    // Verify the request really came from Meta: X-Hub-Signature-256 is an HMAC of
+    // the raw body keyed with the app secret. Only enforced when the secret is
+    // configured (so the webhook keeps working until META_APP_SECRET is set).
+    const appSecret = process.env.META_APP_SECRET;
+    const verifyEnabled = (process.env.WHATSAPP_VERIFY_SIGNATURE ?? 'true') !== 'false';
+    if (appSecret && verifyEnabled) {
+      const sig = req.headers['x-hub-signature-256'] || '';
+      const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
+      const expected = 'sha256=' + crypto.createHmac('sha256', appSecret).update(raw).digest('hex');
+      const a = Buffer.from(sig);
+      const b = Buffer.from(expected);
+      if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+        console.warn('[WhatsApp Webhook] Signature verification failed — rejecting.');
+        return res.status(401).json({ success: false });
+      }
+    } else {
+      console.warn('[WhatsApp Webhook] META_APP_SECRET not set — signature check skipped.');
+    }
+
     const body = req.body;
-    console.log('[WhatsApp Webhook Event Received]:', JSON.stringify(body, null, 2));
+    // Avoid logging full payloads (phone numbers + message content = PII) in
+    // production; keep verbose dumps for local debugging only.
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[WhatsApp Webhook Event]:', JSON.stringify(body));
+    }
 
     const entry = body?.entry?.[0];
     const change = entry?.changes?.[0];
@@ -797,7 +821,8 @@ export async function webhookHandler(req, res) {
       const msgId = message.id;
       const textBody = message.text?.body || '';
 
-      console.log(`[WhatsApp Webhook Message] From: ${phone}, ProfileName: ${profileName}, Type: ${message.type}, Body: ${textBody}`);
+      const maskedPhone = String(phone || '').replace(/^(\d{2})\d+(\d{2})$/, '$1****$2');
+      console.log(`[WhatsApp Webhook Message] From: ${maskedPhone}, Type: ${message.type}`);
 
       // Save incoming message in CRM
       let type = message.type || 'text';

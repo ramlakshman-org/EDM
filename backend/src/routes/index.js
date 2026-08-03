@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { authRequired } from '../middleware/auth.js';
 import * as auth from '../controllers/authController.js';
 import * as dashboard from '../controllers/dashboardController.js';
@@ -24,9 +25,18 @@ import * as templates from '../controllers/templateController.js';
 
 const r = Router();
 
+// Throttle credential endpoints to blunt brute-force / credential-stuffing.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many attempts. Please try again in a few minutes.' },
+});
+
 // ---- Public ----
-r.post('/auth/login', auth.login);
-r.post('/auth/register', auth.register);
+r.post('/auth/login', authLimiter, auth.login);
+r.post('/auth/register', authLimiter, auth.register);
 r.post('/payments/webhook', payments.razorpayWebhook);
 
 // WhatsApp Meta Webhook & Flow Endpoints (Public)
@@ -44,6 +54,7 @@ r.get('/public/booths', booths.boothsByAssembly);
 r.use(authRequired);
 r.get('/auth/me', auth.me);
 r.post('/auth/refresh', auth.refresh);
+r.post('/auth/logout', auth.logout);
 
 // CRM Inbox & WhatsApp Messaging
 r.get('/crm/conversations', crm.listConversations);

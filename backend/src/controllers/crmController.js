@@ -3,6 +3,7 @@ import { sendText, sendUrlButtonMessage, sendFlowMessage, sendMediaMessage, send
 import { saveCrmMessage, getFlowMessageText, getActiveAgents, assignAgentRoundRobin } from './whatsappController.js';
 import * as cloudinary from '../services/cloudinaryService.js';
 import { ROLES } from '../constants/roles.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 
 // Registration template whose CTA is a WhatsApp Flow button (launches the
 // in-WhatsApp registration flow). Used when the messaging window is closed.
@@ -88,7 +89,7 @@ export async function listConversations(req, res) {
     }
 
     if (search.trim()) {
-      const s = search.trim();
+      const s = escapeRegex(search.trim());
       query.$or = [
         { contact_name: { $regex: s, $options: 'i' } },
         { clean_mobile: { $regex: s, $options: 'i' } },

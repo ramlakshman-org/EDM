@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import morgan from 'morgan';
 import { connectDbs, closeDbs, isVoterDbOnline, isAppDbOnline } from './config/db.js';
 import apiRoutes from './routes/index.js';
@@ -8,9 +9,40 @@ import { REPORTS_DIR } from './controllers/reportController.js';
 
 const app = express();
 
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || '*' }));
-app.use(express.json({ limit: '15mb' }));
-app.use(morgan('dev'));
+// Behind the nginx reverse proxy — required for correct client IP (rate limiting)
+// and X-Forwarded-* handling.
+app.set('trust proxy', 1);
+
+// Security headers. CSP is disabled because the pre-generated static HTML reports
+// use inline scripts + relative asset paths; cross-origin resource policy is
+// relaxed so images/reports load from the SPA origin.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+
+// CORS — restrict to the configured client origin (no wildcard fallback).
+const clientOrigin = process.env.CLIENT_ORIGIN || 'https://election2026sir.in';
+app.use(cors({ origin: clientOrigin }));
+
+// Capture the raw body so webhook HMAC signatures (Razorpay, Meta) can be
+// verified against the exact bytes that were signed.
+app.use(express.json({ limit: '15mb', verify: (req, res, buf) => { req.rawBody = buf; } }));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// Don't leak internal error detail to clients in production — generic 5xx message.
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = (payload) => {
+    if (process.env.NODE_ENV === 'production' && res.statusCode >= 500
+        && payload && typeof payload === 'object' && typeof payload.message === 'string') {
+      payload = { ...payload, message: 'Internal server error. Please try again later.' };
+    }
+    return originalJson(payload);
+  };
+  next();
+});
 
 // Static HTML reports (Assembly_Reports / Booth_Reports). Booth reports load a
 // relative lib/ (echarts) so they must be served as files, not inlined.

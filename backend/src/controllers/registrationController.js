@@ -1,5 +1,6 @@
 import { getAppDb } from '../config/db.js';
 import { toObjectId } from '../utils/objectId.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 
 // Mirrors web\admin\DashboardController@registrations* — candidate registrations
 // come from tbl_enquiry; passcode falls back to tbl_user; social broadcast
@@ -65,9 +66,10 @@ export async function list(req, res) {
       q.position = map[p] ? { $in: map[p] } : p;
     }
     if (req.query.search) {
+      const safe = escapeRegex(req.query.search);
       q.$or = [
-        { full_name: { $regex: req.query.search, $options: 'i' } },
-        { mobile: { $regex: req.query.search, $options: 'i' } },
+        { full_name: { $regex: safe, $options: 'i' } },
+        { mobile: { $regex: safe, $options: 'i' } },
       ];
     }
     const page = Number(req.query.page || 1);

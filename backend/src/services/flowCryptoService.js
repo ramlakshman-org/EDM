@@ -12,10 +12,11 @@ export function decryptRequest(body, privateKeyPem) {
   const encAesKeyBuffer = Buffer.from(encrypted_aes_key, 'base64');
   let decryptedAesKey = null;
 
+  // Meta WhatsApp Flows use RSA-OAEP. Only OAEP paddings are accepted — the
+  // insecure PKCS#1 v1.5 fallback was removed (padding-oracle / downgrade risk).
   const paddings = [
     { padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
     { padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha1' },
-    { padding: crypto.constants.RSA_PKCS1_PADDING },
   ];
 
   for (const p of paddings) {

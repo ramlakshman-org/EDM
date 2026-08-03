@@ -33,6 +33,9 @@ export function AuthProvider({ children }) {
   };
 
   const logout = useCallback(() => {
+    // Revoke the token server-side (best-effort, fire-and-forget) so it can't be
+    // reused, then clear local state.
+    api.post('/auth/logout').catch(() => {});
     localStorage.removeItem('edm_token');
     localStorage.removeItem('edm_user');
     localStorage.removeItem(LAST_ACTIVE_KEY);

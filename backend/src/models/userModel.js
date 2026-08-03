@@ -1,5 +1,6 @@
 import { getAppDb } from '../config/db.js';
 import { toObjectId } from '../utils/objectId.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 
 const COLL = 'tbl_user';
 
@@ -47,10 +48,11 @@ export async function listUsers({ search = '', groupId = null, assemblyId = null
   if (groupId !== null && groupId !== '') q.user_group_id = parseInt(groupId, 10);
   if (assemblyId) q.assembly_id = parseInt(assemblyId, 10);
   if (search) {
+    const safe = escapeRegex(search);
     q.$or = [
-      { first_name: { $regex: search, $options: 'i' } },
-      { mobile_no: { $regex: search, $options: 'i' } },
-      { email: { $regex: search, $options: 'i' } },
+      { first_name: { $regex: safe, $options: 'i' } },
+      { mobile_no: { $regex: safe, $options: 'i' } },
+      { email: { $regex: safe, $options: 'i' } },
     ];
   }
   return db.collection(COLL).find(q).limit(limit).toArray();

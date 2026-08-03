@@ -373,10 +373,17 @@ export async function razorpayWebhook(req, res) {
   try {
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || RAZORPAY_SECRET;
     const signature = req.headers['x-razorpay-signature'] || '';
-    const body = req.rawBody || JSON.stringify(req.body);
+    // Verify over the EXACT raw bytes Razorpay signed (not a re-serialized body).
+    const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
 
-    const expectedSig = crypto.createHmac('sha256', webhookSecret).update(body).digest('hex');
-    if (signature && expectedSig !== signature) {
+    // Reject when the signature is missing — never skip verification.
+    if (!signature) {
+      return res.status(400).json({ success: false, message: 'Missing webhook signature.' });
+    }
+    const expectedSig = crypto.createHmac('sha256', webhookSecret).update(raw).digest('hex');
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expectedSig);
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
       return res.status(400).json({ success: false, message: 'Invalid webhook signature.' });
     }
 

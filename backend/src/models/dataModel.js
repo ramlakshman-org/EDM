@@ -1,4 +1,5 @@
 import { getAppDb } from '../config/db.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 
 // Mirrors App\Models\Data (mongodb_app 'data' collection) — generic paginated list.
 const DEFAULT_COLL = 'data';
@@ -9,7 +10,7 @@ function buildQuery({ search = {}, withPhoneOnly = false } = {}) {
   const and = [];
   for (const [k, v] of Object.entries(search)) {
     if (v !== '' && v !== null && v !== undefined) {
-      and.push({ [k]: { $regex: String(v).trim(), $options: 'i' } });
+      and.push({ [k]: { $regex: escapeRegex(String(v).trim()), $options: 'i' } });
     }
   }
   if (withPhoneOnly) { and.push({ phone: { $nin: ['Null', 'N', '', null] } }); }
