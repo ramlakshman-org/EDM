@@ -1,6 +1,28 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client.js';
 
+// Editable copy for the WhatsApp "Choose Service" menu flow. type: 'text' = single line.
+const SVC_FIELDS = [
+  { key: 'svc_welcome_text', label: 'Welcome message (Choose Service body)' },
+  { key: 'svc_menu_heading', label: 'Menu heading (e.g. "Select a service")', type: 'text' },
+  { key: 'svc_demo_text', label: 'Demo message caption' },
+  { key: 'svc_benefits_text', label: 'Benefits content' },
+  { key: 'svc_faq_text', label: 'FAQ content' },
+  { key: 'svc_website_text', label: 'Website message body' },
+  { key: 'svc_website_url', label: 'Website URL', type: 'text' },
+  { key: 'svc_website_btn', label: 'Website button label', type: 'text' },
+  { key: 'svc_support_text', label: 'Support message body' },
+  { key: 'svc_support_phone', label: 'Support phone (with country code, e.g. 9180…)', type: 'text' },
+  { key: 'svc_support_btn', label: 'Support button label', type: 'text' },
+  { key: 'svc_social_submitted_text', label: 'Social request "submitted" message ({channel}, {name})' },
+  { key: 'svc_social_already_text', label: 'Social request "already pending" message ({channel})' },
+  { key: 'svc_social_audio_text', label: 'Audio SMS "send your audio" prompt' },
+  { key: 'svc_social_audio_received_text', label: 'Audio SMS "audio received" confirmation' },
+  { key: 'svc_purchase_intro_text', label: 'Purchase intro message (in-flow)' },
+  { key: 'svc_purchase_link_text', label: 'Purchase payment-link message ({booths}, {amount})' },
+  { key: 'svc_purchase_done_text', label: 'Payment complete message' },
+];
+
 export default function FlowImages() {
   const [assets, setAssets] = useState([]);
   const [messages, setMessages] = useState({
@@ -132,34 +154,11 @@ export default function FlowImages() {
         </p>
 
         <form onSubmit={handleSaveMessages} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Message 1: Registration Invitation */}
+          {/* Message 1: Welcome Back */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <label style={{ fontWeight: 700, fontSize: 13.5, color: '#1e293b' }}>
-                1. New Candidate Registration Invitation Message (Sent to unregistered users)
-              </label>
-              <span style={{ fontSize: 11.5, fontWeight: 700, color: (messages.register_welcome_text?.length || 0) > 1000 ? '#dc2626' : '#64748b' }}>
-                {messages.register_welcome_text?.length || 0} / 1024 chars
-              </span>
-            </div>
-            <textarea
-              rows={4}
-              maxLength={1024}
-              value={messages.register_welcome_text}
-              onChange={(e) => setMessages({ ...messages, register_welcome_text: e.target.value })}
-              placeholder="Enter welcome invitation text..."
-              style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid #cbd5e1', fontSize: 13.5, fontFamily: 'inherit', boxSizing: 'border-box' }}
-            />
-            <span style={{ fontSize: 11.5, color: '#94a3b8', display: 'block', marginTop: 4 }}>
-              Sent alongside the <strong>Register Now 🗳️</strong> Meta WhatsApp Flow button.
-            </span>
-          </div>
-
-          {/* Message 2: Welcome Back */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <label style={{ fontWeight: 700, fontSize: 13.5, color: '#1e293b' }}>
-                2. Already Registered / Welcome Back Message (Sent to existing members)
+                1. Already Registered / Welcome Back Message (Sent to existing members)
               </label>
               <span style={{ fontSize: 11.5, fontWeight: 700, color: (messages.welcome_back_text?.length || 0) > 1000 ? '#dc2626' : '#64748b' }}>
                 {messages.welcome_back_text?.length || 0} / 1024 chars
@@ -182,7 +181,7 @@ export default function FlowImages() {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <label style={{ fontWeight: 700, fontSize: 13.5, color: '#1e293b' }}>
-                3. Registration Success & Login Credentials Confirmation Message
+                2. Registration Success & Login Credentials Confirmation Message
               </label>
               <span style={{ fontSize: 11.5, fontWeight: 700, color: (messages.register_success_text?.length || 0) > 1000 ? '#dc2626' : '#64748b' }}>
                 {messages.register_success_text?.length || 0} / 1024 chars
@@ -218,6 +217,54 @@ export default function FlowImages() {
               }}
             >
               {savingMsgs ? 'Saving Messages...' : '💾 Save Welcome Messages'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* SECTION 1b: CHOOSE-SERVICE MENU COPY */}
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 16, padding: 24, marginBottom: 32, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>🧭</span> Choose-Service Menu Copy
+          </h2>
+          <span style={{ fontSize: 12, background: '#dcfce7', color: '#166534', padding: '4px 12px', borderRadius: 980, fontWeight: 600 }}>
+            WhatsApp Flow
+          </span>
+        </div>
+        <p style={{ fontSize: 13, color: '#64748b', marginTop: 0, marginBottom: 20 }}>
+          Text shown inside the "Choose Service" WhatsApp menu (welcome, benefits, FAQ, website, support, purchase). Upload the matching icons/banners/video in the assets grid below.
+        </p>
+
+        <form onSubmit={handleSaveMessages} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {SVC_FIELDS.map((f) => (
+            <div key={f.key}>
+              <label style={{ fontWeight: 700, fontSize: 13.5, color: '#1e293b', display: 'block', marginBottom: 6 }}>{f.label}</label>
+              {f.type === 'text' ? (
+                <input
+                  type="text"
+                  value={messages[f.key] ?? ''}
+                  onChange={(e) => setMessages({ ...messages, [f.key]: e.target.value })}
+                  style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid #cbd5e1', fontSize: 13.5, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                />
+              ) : (
+                <textarea
+                  rows={4}
+                  maxLength={1600}
+                  value={messages[f.key] ?? ''}
+                  onChange={(e) => setMessages({ ...messages, [f.key]: e.target.value })}
+                  style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid #cbd5e1', fontSize: 13.5, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                />
+              )}
+            </div>
+          ))}
+          <div>
+            <button
+              type="submit"
+              disabled={savingMsgs}
+              style={{ background: '#16a34a', color: '#ffffff', border: 'none', borderRadius: 10, padding: '10px 24px', fontSize: 14, fontWeight: 700, cursor: savingMsgs ? 'not-allowed' : 'pointer', opacity: savingMsgs ? 0.7 : 1 }}
+            >
+              {savingMsgs ? 'Saving…' : '💾 Save Menu Copy'}
             </button>
           </div>
         </form>

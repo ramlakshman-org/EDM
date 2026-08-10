@@ -36,6 +36,8 @@ const authLimiter = rateLimit({
 
 // ---- Public ----
 r.post('/auth/login', authLimiter, auth.login);
+r.post('/auth/send-otp', authLimiter, auth.sendOtp);
+r.post('/auth/verify-otp', authLimiter, auth.verifyOtp);
 r.post('/auth/register', authLimiter, auth.register);
 r.post('/payments/webhook', payments.razorpayWebhook);
 

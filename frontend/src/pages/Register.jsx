@@ -32,6 +32,45 @@ export default function Register() {
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // WhatsApp OTP verification state
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [otpMsg, setOtpMsg] = useState('');
+  const [otpErr, setOtpErr] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
+
+  const requestOtp = async () => {
+    const ta = lang === 'ta';
+    setOtpErr(''); setOtpMsg('');
+    if (!/^\d{10}$/.test(f.mobile)) {
+      setOtpErr(ta ? 'சரியான 10 இலக்க வாட்ஸ்அப் எண்ணை உள்ளிடவும்.' : 'Enter a valid 10-digit WhatsApp number.');
+      return;
+    }
+    setOtpLoading(true);
+    try {
+      const { data } = await api.post('/auth/send-otp', { mobile: f.mobile });
+      if (data.success) { setOtpSent(true); setOtpMsg(ta ? 'OTP உங்கள் வாட்ஸ்அப்பிற்கு அனுப்பப்பட்டது.' : 'OTP sent to your WhatsApp number.'); }
+      else setOtpErr(data.message || 'Failed to send OTP.');
+    } catch (e2) {
+      setOtpErr(e2.response?.data?.message || (ta ? 'OTP அனுப்ப முடியவில்லை.' : 'Failed to send OTP.'));
+    } finally { setOtpLoading(false); }
+  };
+
+  const confirmOtp = async () => {
+    const ta = lang === 'ta';
+    setOtpErr(''); setOtpMsg('');
+    if (!otp) { setOtpErr(ta ? 'OTP ஐ உள்ளிடவும்.' : 'Enter the OTP.'); return; }
+    setOtpLoading(true);
+    try {
+      const { data } = await api.post('/auth/verify-otp', { mobile: f.mobile, otp });
+      if (data.success) { setOtpVerified(true); setOtpMsg(ta ? 'வாட்ஸ்அப் எண் சரிபார்க்கப்பட்டது ✓' : 'WhatsApp number verified ✓'); }
+      else setOtpErr(data.message || 'Incorrect OTP.');
+    } catch (e2) {
+      setOtpErr(e2.response?.data?.message || (ta ? 'தவறான OTP.' : 'Incorrect OTP.'));
+    } finally { setOtpLoading(false); }
+  };
+
   const [allAssemblies, setAllAssemblies] = useState([]);
   const [availableBooths, setAvailableBooths] = useState([]);
   const [loadingBooths, setLoadingBooths] = useState(false);
@@ -84,6 +123,10 @@ export default function Register() {
   const submit = async (e) => {
     e.preventDefault();
     setErr('');
+    if (!otpVerified) {
+      setErr(lang === 'ta' ? 'முதலில் உங்கள் வாட்ஸ்அப் எண்ணை OTP மூலம் சரிபார்க்கவும்.' : 'Please verify your WhatsApp number with the OTP first.');
+      return;
+    }
     if (!f.full_name.trim() || !/^\d{10}$/.test(f.mobile)) {
       setErr(lang === 'ta' ? 'உங்கள் பெயர் மற்றும் 10 இலக்க கைபேசி எண்ணை உள்ளிடவும்.' : 'Enter your name and a valid 10-digit mobile number.');
       return;
@@ -120,9 +163,7 @@ export default function Register() {
       <header className="reg-header-bar">
         <div className="reg-header-inner">
           <Link to="/register" className="reg-brand-link">
-            <span style={{ fontSize: 18 }}>🗳</span>
-            <span className="brand-full-name">Election Data Management 2026</span>
-            <span className="brand-short-name">EDM 2026</span>
+            <img src="/EDM.png" alt="EDMS" className="reg-brand-logo" />
           </Link>
 
           <div className="reg-header-actions">
@@ -229,20 +270,69 @@ export default function Register() {
                     <label>{isTa ? 'முழு பெயர்' : 'Full name'}</label>
                     <input
                       value={f.full_name}
-                      onChange={(e) => set('full_name', e.target.value)}
+                      onChange={(e) => set('full_name', e.target.value.replace(/[0-9]/g, ''))}
                       placeholder={isTa ? 'வாக்காளர் அடையாள அட்டைப்படி' : 'As per voter ID'}
                     />
                   </div>
                   <div className="reg-field">
-                    <label>{isTa ? 'கைபேசி எண்' : 'Mobile number'}</label>
-                    <input
-                      value={f.mobile}
-                      maxLength={10}
-                      onChange={(e) => set('mobile', e.target.value.replace(/\D/g, ''))}
-                      placeholder={isTa ? '10 இலக்க கைபேசி எண்' : '10-digit mobile'}
-                    />
+                    <label>{isTa ? 'உங்கள் வாட்ஸ்அப் எண்ணை உள்ளிடவும்' : 'Enter Your WhatsApp Number'}</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        value={f.mobile}
+                        maxLength={10}
+                        type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        disabled={otpVerified}
+                        onChange={(e) => {
+                          set('mobile', e.target.value.replace(/\D/g, '').slice(0, 10));
+                          setOtpSent(false); setOtpVerified(false); setOtp(''); setOtpErr(''); setOtpMsg('');
+                        }}
+                        placeholder={isTa ? '10 இலக்க வாட்ஸ்அப் எண்' : '10-digit WhatsApp number'}
+                        style={{ flex: 1 }}
+                      />
+                      {!otpVerified ? (
+                        <button
+                          type="button"
+                          onClick={requestOtp}
+                          disabled={otpLoading || f.mobile.length !== 10}
+                          style={{ whiteSpace: 'nowrap', padding: '0 18px', borderRadius: 8, background: '#16a34a', color: '#fff', border: 'none', fontWeight: 700, cursor: (otpLoading || f.mobile.length !== 10) ? 'not-allowed' : 'pointer', opacity: (otpLoading || f.mobile.length !== 10) ? 0.6 : 1 }}
+                        >
+                          {otpLoading ? '…' : (otpSent ? (isTa ? 'மீண்டும் அனுப்பு' : 'Resend') : (isTa ? 'சரிபார் (Approve)' : 'Approve'))}
+                        </button>
+                      ) : (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#16a34a', fontWeight: 800, padding: '0 10px', whiteSpace: 'nowrap' }}>✓ {isTa ? 'சரிபார்க்கப்பட்டது' : 'Verified'}</span>
+                      )}
+                    </div>
                   </div>
 
+                  {otpSent && !otpVerified && (
+                    <div className="reg-field">
+                      <label>{isTa ? 'OTP ஐ உள்ளிடவும்' : 'Enter OTP'}</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          value={otp}
+                          maxLength={8}
+                          inputMode="numeric"
+                          onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                          placeholder={isTa ? 'வாட்ஸ்அப்பில் வந்த குறியீடு' : 'Code sent on WhatsApp'}
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={confirmOtp}
+                          disabled={otpLoading || !otp}
+                          style={{ whiteSpace: 'nowrap', padding: '0 18px', borderRadius: 8, background: '#0071e3', color: '#fff', border: 'none', fontWeight: 700, cursor: (otpLoading || !otp) ? 'not-allowed' : 'pointer', opacity: (otpLoading || !otp) ? 0.6 : 1 }}
+                        >
+                          {otpLoading ? '…' : (isTa ? 'உறுதிப்படுத்து' : 'Verify')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {otpErr && <div className="alert err" style={{ marginTop: 8 }}>{otpErr}</div>}
+                  {otpMsg && <div className="alert" style={{ marginTop: 8, background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', borderRadius: 8, padding: '8px 12px' }}>{otpMsg}</div>}
+
+                  {otpVerified && (<>
                   <div className="reg-sep" />
 
                   {/* STEP 02 ROLE & AFFILIATION */}
@@ -472,6 +562,7 @@ export default function Register() {
                   <button className="reg-submit" disabled={loading}>
                     {loading ? (isTa ? 'செயலாக்கப்படுகிறது…' : 'Processing…') : (isTa ? 'பதிவை முடிக்கவும்' : 'Submit registration')}
                   </button>
+                  </>)}
                 </form>
               </>
             ) : (
@@ -481,22 +572,17 @@ export default function Register() {
                   {isTa ? 'பதிவு வெற்றிகரமாக முடிந்தது!' : 'Registration Successful!'}
                 </h2>
                 <p className="muted">
-                  {isTa ? 'உங்கள் கைபேசி எண்ணின் அடிப்படையில் உள்நுழைவு விவரங்கள் உருவாக்கப்பட்டுள்ளன.' : 'Your login credentials were generated from your mobile number. Copy them below.'}
+                  {isTa
+                    ? 'உங்கள் உள்நுழைவு விவரங்கள் (பயனர் பெயர் & கடவுச்சொல்) உங்கள் வாட்ஸ்அப் எண்ணிற்கு அனுப்பப்பட்டுள்ளன. வாட்ஸ்அப்பைப் பார்க்கவும்.'
+                    : 'Your login credentials (username & passcode) have been sent to your WhatsApp number. Please check WhatsApp.'}
                 </p>
-                <div className="reg-cred">
-                  <div style={{ marginBottom: 12 }}>
-                    <div className="k">{isTa ? 'பயனர் பெயர் (Username)' : 'Username'}</div>
-                    <div className="v">{done.username}</div>
-                  </div>
-                  <div>
-                    <div className="k">{isTa ? 'கடவுச்சொல் (Passcode)' : 'Passcode / Password'}</div>
-                    <div className="v">{done.passcode}</div>
-                  </div>
+                <div className="reg-cred" style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
+                  <span style={{ fontSize: 22 }}>📲</span>
+                  <span style={{ fontWeight: 700, color: '#065f46' }}>
+                    {isTa ? `+91 ${done.username} க்கு அனுப்பப்பட்டது` : `Sent to +91 ${done.username}`}
+                  </span>
                 </div>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button className="secondary" style={{ flex: 1 }} onClick={() => navigator.clipboard?.writeText(done.passcode)}>
-                    {isTa ? 'கடவுச்சொல்லை நகலெடு' : 'Copy Passcode'}
-                  </button>
+                <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
                   <Link to="/login" style={{ flex: 1 }}>
                     <button className="gov-btn" style={{ width: '100%' }}>
                       {isTa ? 'உள்நுழைக' : 'Login Now'}

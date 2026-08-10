@@ -3,6 +3,7 @@ import { signToken, revokeToken } from '../middleware/auth.js';
 import { findByCredentials, nextUserId, existsByMobile, insertUser, blankUser, findWardMainAdmin, maxUserId } from '../models/userModel.js';
 import { isAppDbOnline, getAppDb } from '../config/db.js';
 import { ROLES, ROLE_NAME, roleHome } from '../constants/roles.js';
+import { watiConfigured, sendWatiCredentials, sendWatiTemplate } from '../services/watiService.js';
 
 // Set the JWT as an HttpOnly cookie so it can't be read/stolen by JavaScript
 // (XSS). Secure in production; SameSite=Strict since the SPA and API share an
@@ -57,8 +58,12 @@ export async function login(req, res) {
     }
 
     const groupId = Number(user.user_group_id || 0);
-    // Booth (group 4) requires a booth_id, mirroring redirectByGroup.
-    if (groupId === ROLES.BOOTH && !user.booth_id) {
+    // Booth logins (group 4) need at least one booth — accept either a single
+    // booth_id (booth agents) OR a booths[] array (registered candidates who
+    // cover many booths). Previously only booth_id was checked, which wrongly
+    // blocked candidates whose booths live in the array.
+    const hasAnyBooth = !!user.booth_id || (Array.isArray(user.booths) && user.booths.length > 0);
+    if (groupId === ROLES.BOOTH && !hasAnyBooth) {
       return res.status(403).json({ success: false, message: 'Must have at least one booth for login access.' });
     }
 
@@ -101,6 +106,78 @@ export async function login(req, res) {
   }
 }
 
+// ─── WhatsApp OTP verification (via WATI) for public registration ───
+const OTP_TTL_MS = 10 * 60 * 1000;          // code valid for 10 minutes
+const OTP_VERIFIED_TTL_MS = 30 * 60 * 1000; // verified state valid for 30 minutes
+const OTP_MAX_ATTEMPTS = 5;
+
+// POST /auth/send-otp — generate a 6-digit code, store it, and deliver via WATI.
+export async function sendOtp(req, res) {
+  const mobile = String(req.body?.mobile || '').replace(/\D/g, '');
+  if (!/^\d{10}$/.test(mobile)) {
+    return res.status(400).json({ success: false, message: 'Enter a valid 10-digit WhatsApp number.' });
+  }
+  if (!isAppDbOnline()) {
+    return res.status(503).json({ success: false, message: 'Service temporarily unavailable. Please try again shortly.' });
+  }
+  if (!watiConfigured()) {
+    return res.status(501).json({ success: false, message: 'OTP service is not configured.' });
+  }
+  try {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const now = Date.now();
+    await getAppDb().collection('tbl_otp').updateOne(
+      { mobile },
+      {
+        $set: {
+          mobile, code,
+          expires_at: new Date(now + OTP_TTL_MS).toISOString(),
+          verified: false, verified_at: null, attempts: 0,
+          updated_at: new Date().toISOString(),
+        },
+        $setOnInsert: { created_at: new Date().toISOString() },
+      },
+      { upsert: true },
+    );
+    const templateName = process.env.WATI_OTP_TEMPLATE || 'edms_otp';
+    // Param name differs by template type: Authentication templates use "1"
+    // (the {{1}} code var), our Utility template uses "code".
+    const otpParam = process.env.WATI_OTP_PARAM || 'code';
+    await sendWatiTemplate({ mobile, templateName, parameters: [{ name: otpParam, value: code }] });
+    return res.json({ success: true, message: 'OTP sent to your WhatsApp number.' });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: 'Could not send OTP: ' + e.message });
+  }
+}
+
+// POST /auth/verify-otp — check the code and mark the number verified.
+export async function verifyOtp(req, res) {
+  const mobile = String(req.body?.mobile || '').replace(/\D/g, '');
+  const otp = String(req.body?.otp || '').replace(/\D/g, '');
+  if (!/^\d{10}$/.test(mobile) || !otp) {
+    return res.status(400).json({ success: false, message: 'WhatsApp number and OTP are required.' });
+  }
+  try {
+    const coll = getAppDb().collection('tbl_otp');
+    const rec = await coll.findOne({ mobile });
+    if (!rec) return res.status(400).json({ success: false, message: 'Please request an OTP first.' });
+    if ((rec.attempts || 0) >= OTP_MAX_ATTEMPTS) {
+      return res.status(429).json({ success: false, message: 'Too many attempts. Please request a new OTP.' });
+    }
+    if (new Date(rec.expires_at).getTime() < Date.now()) {
+      return res.status(400).json({ success: false, message: 'OTP expired. Please request a new one.' });
+    }
+    if (String(rec.code) !== otp) {
+      await coll.updateOne({ mobile }, { $inc: { attempts: 1 } });
+      return res.status(400).json({ success: false, message: 'Incorrect OTP. Please try again.' });
+    }
+    await coll.updateOne({ mobile }, { $set: { verified: true, verified_at: new Date().toISOString() } });
+    return res.json({ success: true, message: 'WhatsApp number verified.' });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+}
+
 // Public candidate registration — mirrors the /register flow on the landing page.
 // Creates a tbl_user (ward-scoped by default) and returns generated credentials.
 export async function register(req, res) {
@@ -118,6 +195,15 @@ export async function register(req, res) {
   }
   try {
     const db = getAppDb();
+
+    // Require a recently verified OTP for this WhatsApp number.
+    const otpRec = await db.collection('tbl_otp').findOne({ mobile });
+    const verifiedRecent = otpRec?.verified && otpRec.verified_at
+      && (Date.now() - new Date(otpRec.verified_at).getTime() < OTP_VERIFIED_TTL_MS);
+    if (!verifiedRecent) {
+      return res.status(403).json({ success: false, message: 'Please verify your WhatsApp number with the OTP first.' });
+    }
+
     const passcode = String(Math.floor(100000 + Math.random() * 900000));
     const district = b.district || '';
     const bodyType = b.body_type || '';
@@ -174,6 +260,16 @@ export async function register(req, res) {
         booths: boothObjects,
         is_user_login: true,
       } });
+    }
+
+    // Consume the verified OTP so it can't be reused.
+    await db.collection('tbl_otp').deleteOne({ mobile }).catch(() => {});
+
+    // Deliver login credentials over WhatsApp via WATI (approved template).
+    // Best-effort and non-blocking — never fail registration if WATI is down.
+    if (watiConfigured()) {
+      sendWatiCredentials({ mobile, name: fullName, username: mobile, passcode })
+        .catch((e) => console.error('[WATI web registration]', e.message));
     }
 
     return res.json({ success: true, message: 'Registration successful!', username: mobile, passcode });

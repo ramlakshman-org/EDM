@@ -59,7 +59,10 @@ export async function filterVoters(assemblyId, filters, { page = 1, pageSize = 2
   return { rows, total, page: Number(page), pageSize };
 }
 
-// Multi-assembly voter filter for Ward logins with booths across multiple assemblies
+// Multi-assembly voter filter for logins with booths across one or more
+// assemblies. Paginates at the DATABASE level — it never loads the full result
+// set into Node memory (the old version did `.toArray()` on every collection and
+// sorted in JS, which was extremely slow for booth logins with many booths).
 export async function filterVotersMultiAssembly(scopeMap, filters, { page = 1, pageSize = 25 } = {}) {
   const db = getVoterDb();
   const entries = Object.entries(scopeMap).filter(([, parts]) => parts && parts.length);
@@ -67,28 +70,44 @@ export async function filterVotersMultiAssembly(scopeMap, filters, { page = 1, p
     return { rows: [], total: 0, page: Number(page), pageSize };
   }
 
+  // Common case (booth/candidate login): all booths are in ONE assembly →
+  // a single collection query with DB skip/limit.
+  if (entries.length === 1) {
+    const [acNo, parts] = entries[0];
+    return filterVoters(acNo, { ...filters, partNos: parts }, { page, pageSize });
+  }
+
+  // True multi-assembly (e.g. ward across assemblies): count each collection,
+  // then fetch only the rows the requested page needs by walking collections in
+  // order and applying skip/limit — no full in-memory load.
   const queries = entries.map(([acNo, parts]) => ({
-    acNo,
     coll: db.collection(collectionForAc(acNo)),
     query: buildQuery({ ...filters, partNos: parts }),
   }));
 
-  const countPromises = queries.map(({ coll, query }) => coll.countDocuments(query));
-  const counts = await Promise.all(countPromises);
+  const counts = await Promise.all(queries.map(({ coll, query }) => coll.countDocuments(query)));
   const total = counts.reduce((acc, c) => acc + c, 0);
 
-  const rowPromises = queries.map(({ coll, query }) =>
-    coll.find(query).sort({ PART_NO: 1, SLNO: 1 }).toArray()
-  );
-  const rowSets = await Promise.all(rowPromises);
-  const combined = rowSets.flat();
+  const pageNum = Math.max(1, Number(page));
+  let skip = (pageNum - 1) * pageSize;
+  let need = pageSize;
+  const rows = [];
 
-  combined.sort((a, b) => (a.PART_NO || 0) - (b.PART_NO || 0) || (a.SLNO || 0) - (b.SLNO || 0));
+  for (let i = 0; i < queries.length && need > 0; i += 1) {
+    const cnt = counts[i];
+    if (skip >= cnt) { skip -= cnt; continue; } // entire collection is before this page
+    const chunk = await queries[i].coll
+      .find(queries[i].query)
+      .sort({ PART_NO: 1, SLNO: 1 })
+      .skip(skip)
+      .limit(need)
+      .toArray();
+    rows.push(...chunk);
+    need -= chunk.length;
+    skip = 0;
+  }
 
-  const skip = (Math.max(1, page) - 1) * pageSize;
-  const pagedRows = combined.slice(skip, skip + pageSize);
-
-  return { rows: pagedRows, total, page: Number(page), pageSize };
+  return { rows, total, page: pageNum, pageSize };
 }
 
 // Gender counts for one booth (PART_NO) within an assembly
@@ -131,34 +150,39 @@ export async function assemblyAnalytics(assemblyId, booth = null, partNos = null
     }
   }
 
-  const [countsAgg, boothsAgg] = await Promise.all([
-    coll.aggregate([
-      ...match,
-      { $group: {
-          _id: null,
-          total: { $sum: 1 },
-          male: { $sum: { $cond: [{ $eq: ['$GENDER', 'Male'] }, 1, 0] } },
-          female: { $sum: { $cond: [{ $eq: ['$GENDER', 'Female'] }, 1, 0] } },
-          youth: { $sum: { $cond: [{ $and: [{ $gte: ['$AGE', 18] }, { $lte: ['$AGE', 35] }] }, 1, 0] } },
-          middle: { $sum: { $cond: [{ $and: [{ $gte: ['$AGE', 36] }, { $lte: ['$AGE', 59] }] }, 1, 0] } },
-          senior: { $sum: { $cond: [{ $gte: ['$AGE', 60] }, 1, 0] } },
-      } },
-    ]).toArray(),
-    coll.aggregate([
-      ...match,
-      { $group: {
-          _id: '$PART_NO',
-          booth_name: { $first: '$BOOTH_NAME' },
-          latitude: { $first: '$LATITUDE' },
-          longitude: { $first: '$LONGITUDE' },
-          voter_count: { $sum: 1 },
-          male_voters: { $sum: { $cond: [{ $eq: ['$GENDER', 'Male'] }, 1, 0] } },
-          female_voters: { $sum: { $cond: [{ $eq: ['$GENDER', 'Female'] }, 1, 0] } },
-          other_voters: { $sum: { $cond: [{ $and: [{ $ne: ['$GENDER', 'Male'] }, { $ne: ['$GENDER', 'Female'] }] }, 1, 0] } },
-      } },
-      { $sort: { _id: 1 } },
-    ]).toArray(),
-  ]);
+  // Single pass over the matched set via $facet (was two separate aggregations
+  // = two scans). Computes overall counts and per-booth breakdown together.
+  const facet = await coll.aggregate([
+    ...match,
+    { $facet: {
+      counts: [
+        { $group: {
+            _id: null,
+            total: { $sum: 1 },
+            male: { $sum: { $cond: [{ $eq: ['$GENDER', 'Male'] }, 1, 0] } },
+            female: { $sum: { $cond: [{ $eq: ['$GENDER', 'Female'] }, 1, 0] } },
+            youth: { $sum: { $cond: [{ $and: [{ $gte: ['$AGE', 18] }, { $lte: ['$AGE', 35] }] }, 1, 0] } },
+            middle: { $sum: { $cond: [{ $and: [{ $gte: ['$AGE', 36] }, { $lte: ['$AGE', 59] }] }, 1, 0] } },
+            senior: { $sum: { $cond: [{ $gte: ['$AGE', 60] }, 1, 0] } },
+        } },
+      ],
+      booths: [
+        { $group: {
+            _id: '$PART_NO',
+            booth_name: { $first: '$BOOTH_NAME' },
+            latitude: { $first: '$LATITUDE' },
+            longitude: { $first: '$LONGITUDE' },
+            voter_count: { $sum: 1 },
+            male_voters: { $sum: { $cond: [{ $eq: ['$GENDER', 'Male'] }, 1, 0] } },
+            female_voters: { $sum: { $cond: [{ $eq: ['$GENDER', 'Female'] }, 1, 0] } },
+            other_voters: { $sum: { $cond: [{ $and: [{ $ne: ['$GENDER', 'Male'] }, { $ne: ['$GENDER', 'Female'] }] }, 1, 0] } },
+        } },
+        { $sort: { _id: 1 } },
+      ],
+    } },
+  ]).toArray();
+  const countsAgg = facet[0]?.counts || [];
+  const boothsAgg = facet[0]?.booths || [];
 
   const c = countsAgg[0] || { total: 0, male: 0, female: 0, youth: 0, middle: 0, senior: 0 };
   const other = c.total - c.male - c.female;

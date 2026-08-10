@@ -3,8 +3,10 @@ import { getAppDb, getVoterDb } from '../config/db.js';
 import { sendText, sendFlowMessage, sendUrlButtonMessage, getMediaInfo, downloadMediaBytes } from '../services/whatsappService.js';
 import * as cloudinary from '../services/cloudinaryService.js';
 import { decryptRequest, encryptResponse, getFlowPrivateKey } from '../services/flowCryptoService.js';
+import { watiConfigured, sendWatiCredentials } from '../services/watiService.js';
 import { URBAN_POSITIONS, RURAL_POSITIONS, districtsFor } from '../constants/localBodies.js';
 import { ROLES } from '../constants/roles.js';
+import { calculateWardPricing } from './paymentController.js';
 import bcrypt from 'bcryptjs';
 
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || 'election2026_verification_token';
@@ -503,6 +505,32 @@ async function handleGreeting(phone, textBody, profileName = null) {
     user = await db.collection('tbl_user').findOne({ mobile_no: cleanMobile, is_user_login: true });
   }
 
+  // New behavior: send the "Choose Service" menu flow. The endpoint builds the
+  // menu based on registration / purchase state. Falls back to the old direct
+  // messages if the services flow isn't configured.
+  if (SERVICES_FLOW_ID) {
+    try {
+      // Message header (the media on the "Choose Service" bubble) varies by state:
+      // new user -> Registration Flow Header; registered -> Already Registered Header.
+      const registered = !!(user || enquiry);
+      const header = await getFlowAsset(registered ? 'welcome_back_header' : 'register_header');
+      const bodyText = await getFlowMessageText('svc_welcome_text', 'Namaste\n\nWelcome to EDMS. Tap *Choose Service* below.');
+      const res = await sendServicesMenuFlow(phone, header);
+      await saveCrmMessage({
+        phone,
+        direction: 'outgoing',
+        type: 'interactive',
+        body: bodyText,
+        waMessageId: res?.messages?.[0]?.id,
+        contactName: (user ? [user.first_name, user.last_name].filter(Boolean).join(' ') : null) || profileName || `User ${cleanMobile.slice(-4)}`,
+        metadata: { action: 'sent_services_menu', headerUrl: header?.headerUrl, headerType: header?.headerUrl ? (header.headerType || 'image') : 'text', flowCta: 'Choose Service' },
+      });
+      return;
+    } catch (e) {
+      console.error('[WhatsApp Bot] services menu flow failed, falling back:', e.message);
+    }
+  }
+
   if (user) {
     // User is registered -> Send Login Credentials
     const passcode = user.password_str || cleanMobile;
@@ -729,6 +757,12 @@ async function handleFlowResponse(phone, payload) {
       btnUrl: 'https://election2026sir.in/login',
     },
   });
+
+  // Also deliver credentials via WATI (approved template) — best-effort.
+  if (watiConfigured()) {
+    sendWatiCredentials({ mobile: cleanMobile, name: fullName, username: cleanMobile, passcode })
+      .catch((e) => console.error('[WATI flow registration]', e.message));
+  }
 }
 
 /**
@@ -847,7 +881,20 @@ export async function webhookHandler(req, res) {
           referral: message.referral || null,
         });
 
-        await handleFlowResponse(phone, flowPayload);
+        // Route Choose-Service completions (social request / purchase) separately
+        // from the registration flow, which shares this endpoint.
+        if (flowPayload.kind === 'social_request' || flowPayload.kind === 'purchase') {
+          await handleServicesComplete(phone, flowPayload);
+        } else if (flowPayload.kind === 'svc_info' && flowPayload.action) {
+          // Deferred action: the user tapped Close on an INFO screen — now send
+          // the chat message they asked for (credentials / register / demo / …).
+          await handleServicesInfoAction(phone, flowPayload.action);
+        } else if (flowPayload.full_name || flowPayload.mobile) {
+          await handleFlowResponse(phone, flowPayload);
+        } else {
+          // Benefits / FAQ / Info screens complete with an empty payload — no action.
+          console.log('[WhatsApp Webhook] Flow completed with no actionable payload.');
+        }
       } else if (['image', 'video', 'audio', 'document', 'sticker', 'voice'].includes(message.type)) {
         // Incoming multimedia — download from Meta, store on Cloudinary, render in CRM.
         const media = await processIncomingMedia(message);
@@ -862,6 +909,12 @@ export async function webhookHandler(req, res) {
           referral: message.referral || null,
           metadata: media ? { mediaUrl: media.mediaUrl, mediaType: media.mediaType, mime: media.mime, filename: media.filename } : {},
         });
+
+        // If this is an audio/voice message and the contact has a social request
+        // awaiting an audio file, attach it and mark the request ready.
+        if ((kind === 'audio') && media?.mediaUrl) {
+          try { await attachAudioToPendingRequest(phone, media); } catch (e) { console.error('[svc audio attach]', e.message); }
+        }
       } else {
         // Standard text or interactive message
         await saveCrmMessage({
@@ -884,6 +937,571 @@ export async function webhookHandler(req, res) {
     return res.status(200).json({ success: true }); // Always return 200 to Meta
   }
 }
+
+// ─────────────────── "Choose Service" flow (separate published flow) ───────────────────
+const SERVICES_FLOW_ID = process.env.SERVICES_FLOW_ID || '';
+
+// Fetch a Cloudinary image, resized via URL transform, as raw base64 (Flow Image
+// components need base64, not a URL). Returns '' on any failure (icon optional).
+async function cloudinaryB64(url, w, h) {
+  if (!url) return '';
+  try {
+    let u = String(url).replace(/^http:\/\//, 'https://');
+    if (u.includes('/upload/')) u = u.replace('/upload/', `/upload/w_${w},h_${h},c_fill,q_70,f_jpg/`);
+    const res = await fetch(u, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return '';
+    return Buffer.from(await res.arrayBuffer()).toString('base64');
+  } catch { return ''; }
+}
+
+function svcPhoneFromToken(token) {
+  return String(token || '').replace(/^svc_/, '').replace(/\D/g, '').slice(-10);
+}
+
+// Download a flow-uploaded media item (DocumentPicker/PhotoPicker returns
+// { id, mime_type, sha256, file_name }) via the Graph media API and re-host it
+// on Cloudinary. Returns { url, mime, filename } or null.
+async function downloadFlowMediaToCloudinary(item) {
+  try {
+    const id = item?.id || item?.media_id;
+    if (!id) return null;
+    const info = await getMediaInfo(String(id));
+    const buffer = await downloadMediaBytes(info.url);
+    const mime = item.mime_type || info.mime_type || 'application/octet-stream';
+    const resourceType = mime.includes('image') ? 'image' : mime.includes('video') ? 'video' : 'auto';
+    const filename = item.file_name || `flow_${Date.now()}`;
+    const uploaded = await cloudinary.upload(buffer, filename, resourceType, 'social-requests');
+    return { url: uploaded.url, mime, filename };
+  } catch (e) {
+    console.error('[downloadFlowMediaToCloudinary]', e.message);
+    return null;
+  }
+}
+
+// Build the service menu, varying by registration / purchase state.
+async function buildServicesMenu(db, { registered, purchased }) {
+  const defs = [];
+  if (!registered) {
+    defs.push({ id: 'register', title: 'Register', description: 'Create your EDMS account', icon: 'svc_icon_register' });
+  } else {
+    defs.push({ id: 'credentials', title: 'My Credentials', description: 'Get your login details', icon: 'svc_icon_credentials' });
+    defs.push({ id: 'social', title: 'Social Media Request', description: 'WhatsApp / Audio / SMS broadcast', icon: 'svc_icon_social' });
+    defs.push({ id: 'purchase', title: purchased ? 'My Plan' : 'Purchase', description: purchased ? 'View your subscription' : 'Activate your subscription', icon: 'svc_icon_purchase' });
+  }
+  defs.push({ id: 'demo', title: 'Demo', description: 'Watch a quick demo', icon: 'svc_icon_demo' });
+  defs.push({ id: 'benefits', title: 'Benefits', description: 'Why EDMS', icon: 'svc_icon_benefits' });
+  defs.push({ id: 'faq', title: 'FAQ', description: 'Common questions', icon: 'svc_icon_faq' });
+  defs.push({ id: 'website', title: 'Website', description: 'Visit our website', icon: 'svc_icon_website' });
+  defs.push({ id: 'support', title: 'Support', description: 'Talk to our team', icon: 'svc_icon_support' });
+
+  return Promise.all(defs.map(async (d) => {
+    const item = { id: d.id, title: d.title, description: d.description };
+    const asset = await getFlowAsset(d.icon);
+    if (asset?.headerUrl) {
+      const b64 = await cloudinaryB64(asset.headerUrl, 200, 200);
+      if (b64) item.image = b64;
+    }
+    return item;
+  }));
+}
+
+// Send the Choose-Service menu flow (used by greeting + to re-open the menu).
+// `headerAsset` optionally overrides the message header media (state-based:
+// register_header for new users, welcome_back_header for registered users).
+async function sendServicesMenuFlow(phone, headerAsset = null) {
+  const cleanMobile = String(phone).replace(/\D/g, '').slice(-10);
+  const banner = headerAsset || await getFlowAsset('svc_welcome_banner');
+  const bodyText = await getFlowMessageText('svc_welcome_text', 'Namaste\n\nWelcome to EDMS. Tap *Choose Service* below.');
+  return sendFlowMessage(phone, {
+    flowId: SERVICES_FLOW_ID,
+    flowCta: 'Choose Service',
+    flowAction: 'data_exchange',
+    bodyText,
+    headerText: banner?.headerUrl ? undefined : 'EDMS',
+    headerUrl: banner?.headerUrl || null,
+    headerType: banner?.headerUrl ? (banner.headerType || 'image') : 'text',
+    flowToken: `svc_${cleanMobile}`,
+    footerText: 'EDMS',
+  });
+}
+
+// Send the (existing) registration flow to a contact.
+async function sendRegisterFlowTo(phone) {
+  const cleanMobile = String(phone).replace(/\D/g, '').slice(-10);
+  const bodyText = await getFlowMessageText('register_welcome_text', 'Tap the button below to register.');
+  const regAsset = await getFlowAsset('register_header');
+  const res = await sendFlowMessage(phone, {
+    flowCta: 'Register Now 🗳️',
+    bodyText,
+    headerText: 'Candidate Registration',
+    flowToken: `register_${cleanMobile}`,
+    headerUrl: regAsset.headerUrl,
+    headerType: regAsset.headerType,
+  });
+  await saveCrmMessage({ phone: String(phone).replace(/\D/g, ''), direction: 'outgoing', type: 'interactive', body: bodyText, waMessageId: res?.messages?.[0]?.id, metadata: { action: 'sent_registration_flow', headerUrl: regAsset.headerUrl, headerType: regAsset.headerType, flowCta: 'Register Now 🗳️' } });
+}
+
+// Send the login-credentials message to a registered contact.
+async function sendCredentialsTo(phone) {
+  const db = getAppDb();
+  const cleanMobile = String(phone).replace(/\D/g, '').slice(-10);
+  const user = await db.collection('tbl_user').findOne({ mobile_no: cleanMobile });
+  const enquiry = await db.collection('tbl_enquiry').findOne({ mobile: cleanMobile });
+  const name = user ? [user.first_name, user.last_name].filter(Boolean).join(' ') : (enquiry?.full_name || enquiry?.firstname || 'User');
+  const passcode = user?.password_str || enquiry?.passcode || cleanMobile;
+  const bodyText = await getFlowMessageText('welcome_back_text',
+    'Welcome back *{name}*! You are already registered.\n\n🔑 *Username:* `{username}`\n🔒 *Passcode:* `{passcode}`\n\nUse these to log in.',
+    { name, username: cleanMobile, passcode });
+  const wbAsset = await getFlowAsset('welcome_back_header');
+  const res = await sendUrlButtonMessage(phone, {
+    bodyText, headerText: 'Welcome Back', btnText: 'Login Now', btnUrl: 'https://election2026sir.in/login',
+    headerUrl: wbAsset.headerUrl, headerType: wbAsset.headerType,
+  });
+  await saveCrmMessage({ phone: String(phone).replace(/\D/g, ''), direction: 'outgoing', type: 'interactive', body: bodyText, waMessageId: res?.messages?.[0]?.id, contactName: name, metadata: { action: 'sent_credentials', passcode, username: cleanMobile, headerUrl: wbAsset.headerUrl, headerType: wbAsset.headerType, btnText: 'Login Now', btnUrl: 'https://election2026sir.in/login' } });
+}
+
+// Send Demo (video + Choose Service CTA), Website (image + URL button), Support (image + Choose Service CTA + phone in body).
+async function sendServiceContent(phone, kind) {
+  const cleanMobile = String(phone).replace(/\D/g, '').slice(-10);
+  if (kind === 'demo') {
+    const v = await getFlowAsset('svc_demo_video');
+    const body = await getFlowMessageText('svc_demo_text', 'Here is a quick demo of EDMS.');
+    await sendFlowMessage(phone, { flowId: SERVICES_FLOW_ID, flowCta: 'Choose Service', flowAction: 'data_exchange', bodyText: body, headerUrl: v.headerUrl || null, headerType: v.headerUrl ? 'video' : 'text', headerText: v.headerUrl ? undefined : 'EDMS Demo', flowToken: `svc_${cleanMobile}`, footerText: 'EDMS' });
+  } else if (kind === 'website') {
+    const img = await getFlowAsset('svc_website_image');
+    const body = await getFlowMessageText('svc_website_text', 'Explore EDMS on our website.');
+    const url = await getFlowMessageText('svc_website_url', 'https://election2026sir.in');
+    const btn = await getFlowMessageText('svc_website_btn', 'Visit Website');
+    await sendUrlButtonMessage(phone, { bodyText: body, headerText: img.headerUrl ? undefined : 'EDMS', btnText: btn, btnUrl: url, headerUrl: img.headerUrl, headerType: img.headerUrl ? 'image' : 'text' });
+  } else if (kind === 'support') {
+    const img = await getFlowAsset('svc_support_image');
+    const phoneNo = await getFlowMessageText('svc_support_phone', '918106811285');
+    let body = await getFlowMessageText('svc_support_text', 'Need help? Our team is here for you.');
+    body += `\n\nCall us: +${String(phoneNo).replace(/\D/g, '')}`;
+    await sendFlowMessage(phone, { flowId: SERVICES_FLOW_ID, flowCta: 'Choose Service', flowAction: 'data_exchange', bodyText: body, headerUrl: img.headerUrl || null, headerType: img.headerUrl ? 'image' : 'text', headerText: img.headerUrl ? undefined : 'EDMS Support', flowToken: `svc_${cleanMobile}`, footerText: 'EDMS' });
+  }
+}
+
+// INFO terminal screen. `action` (optional) is echoed back in the flow's
+// completion payload so the webhook can send the corresponding chat message
+// only after the user taps Close (not while the INFO screen is still open).
+const INFO = (title, body, action = '') => ({ version: '3.0', screen: 'INFO', data: { info_title: title, info_body: body, action } });
+
+// Perform a deferred INFO action once the flow has closed.
+async function handleServicesInfoAction(phone, action) {
+  try {
+    if (action === 'credentials') return await sendCredentialsTo(phone);
+    if (action === 'demo') return await sendServiceContent(phone, 'demo');
+    if (action === 'website') return await sendServiceContent(phone, 'website');
+    if (action === 'support') return await sendServiceContent(phone, 'support');
+  } catch (e) {
+    console.error('[svc info action]', action, e.message);
+  }
+}
+
+// Main services-flow handler (token prefix svc_). Returns a { version, screen, data } response.
+async function handleServicesFlow({ action, screen, data, flow_token, db }) {
+  const cleanMobile = svcPhoneFromToken(flow_token);
+  const phone = cleanMobile;
+  const user = await db.collection('tbl_user').findOne({ mobile_no: cleanMobile });
+  const enquiry = await db.collection('tbl_enquiry').findOne({ mobile: cleanMobile });
+  const registered = !!(user || enquiry);
+  const purchased = String(user?.paid_status || enquiry?.paid_status || 'No').toLowerCase() === 'yes';
+
+  // INIT (or no screen) → main menu
+  if (action === 'INIT' || !screen) {
+    const banner = await getFlowAsset('svc_welcome_banner');
+    const bannerB64 = banner?.headerUrl ? await cloudinaryB64(banner.headerUrl, 1000, 125) : '';
+    const heading = await getFlowMessageText('svc_menu_heading', 'Select a service');
+    return {
+      version: '3.0',
+      screen: 'SERVICE_SELECT',
+      data: {
+        welcome_banner: bannerB64,
+        has_welcome_banner: !!bannerB64,
+        menu_heading: heading,
+        services: await buildServicesMenu(db, { registered, purchased }),
+      },
+    };
+  }
+
+  // Registration screens run inside this flow (Register option). Delegate to the
+  // shared registration logic; SUMMARY_SUBMIT completes with the registration
+  // payload, which the webhook routes to handleFlowResponse.
+  if (REGISTRATION_SCREENS.has(screen)) {
+    const resp = await registrationScreenResponse({ action, screen, data, db });
+    if (resp) return resp;
+  }
+
+  if (action === 'data_exchange' && screen === 'SERVICE_SELECT') {
+    const sel = data?.selected_service;
+
+    // Register opens the registration screens inside this same flow.
+    if (sel === 'register') return { version: '3.0', screen: 'WELCOME', data: {} };
+    // These send a chat message; defer the send to flow completion (on Close) by
+    // echoing the action in the INFO payload — the webhook sends it afterwards.
+    if (sel === 'credentials') return INFO('Your Credentials', 'Tap Close and your login details will be sent to you in the chat.', 'credentials');
+    if (sel === 'demo') return INFO('Demo', 'Tap Close and your demo will be sent to you in the chat.', 'demo');
+    if (sel === 'website') return INFO('Website', 'Tap Close and our website link will be sent to you in the chat.', 'website');
+    if (sel === 'support') return INFO('Support', 'Tap Close and our support details will be sent to you in the chat.', 'support');
+
+    if (sel === 'benefits') {
+      const b = await getFlowAsset('svc_benefits_banner');
+      return { version: '3.0', screen: 'BENEFITS', data: { banner: b?.headerUrl ? await cloudinaryB64(b.headerUrl, 1000, 125) : '', has_banner: !!b?.headerUrl, content: await getFlowMessageText('svc_benefits_text', 'EDMS benefits.') } };
+    }
+    if (sel === 'faq') {
+      const b = await getFlowAsset('svc_faq_banner');
+      return { version: '3.0', screen: 'FAQ', data: { banner: b?.headerUrl ? await cloudinaryB64(b.headerUrl, 1000, 125) : '', has_banner: !!b?.headerUrl, content: await getFlowMessageText('svc_faq_text', 'FAQ.') } };
+    }
+
+    if (sel === 'social') {
+      if (!registered) return INFO('Register first', 'Please register before sending a social media request.');
+      const b = await getFlowAsset('svc_social_banner');
+      const chan = async (id, title, desc, icon) => { const it = { id, title, description: desc }; const a = await getFlowAsset(icon); if (a?.headerUrl) { const x = await cloudinaryB64(a.headerUrl, 200, 200); if (x) it.image = x; } return it; };
+      return {
+        version: '3.0', screen: 'SOCIAL_SELECT',
+        data: {
+          banner: b?.headerUrl ? await cloudinaryB64(b.headerUrl, 1000, 125) : '', has_banner: !!b?.headerUrl,
+          channels: [
+            await chan('whatsapp', 'WhatsApp', 'WhatsApp broadcast', 'svc_icon_whatsapp'),
+            await chan('audio', 'Audio SMS', 'Voice call broadcast', 'svc_icon_audio'),
+            await chan('sms', 'SMS Broadcast', 'Text SMS broadcast', 'svc_icon_sms'),
+          ],
+        },
+      };
+    }
+
+    if (sel === 'purchase') {
+      const b = await getFlowAsset('svc_purchase_banner');
+      const bannerB64 = b?.headerUrl ? await cloudinaryB64(b.headerUrl, 1000, 125) : '';
+      const booths = Array.isArray(user?.booths) ? user.booths.length : 0;
+      if (purchased) {
+        const planText = `Status: ✅ Active\nBooths: ${booths || '-'}\nAssembly: ${user?.assembly_name || user?.assembly_id || '-'}`;
+        return { version: '3.0', screen: 'PURCHASE', data: { banner: bannerB64, has_banner: !!bannerB64, plan_title: 'Your EDMS Plan', plan_text: planText, cta_label: 'Close' } };
+      }
+      const intro = await getFlowMessageText('svc_purchase_intro_text', 'Activate your EDMS subscription.');
+      const planText = `${intro}\n\nTap below and we'll send your secure payment link in the chat.`;
+      return { version: '3.0', screen: 'PURCHASE', data: { banner: bannerB64, has_banner: !!bannerB64, plan_title: 'EDMS Subscription', plan_text: planText, cta_label: 'Get Payment Link' } };
+    }
+
+    return INFO('EDMS', 'Please type *hi* to open the menu again.');
+  }
+
+  if (action === 'data_exchange' && screen === 'SOCIAL_SELECT') {
+    const channel = data?.social_channel;
+    // Already-requested guard: if an open request exists for this channel, show
+    // the "already requested" screen instead of opening the form again.
+    if (['whatsapp', 'audio', 'sms'].includes(channel)) {
+      const open = await db.collection('tbl_social_request').findOne({ mobile: cleanMobile, channel, status: { $in: OPEN_REQUEST_STATUSES } });
+      if (open) {
+        const already = await getFlowMessageText('svc_social_already_text',
+          'You already have a pending *{channel}* request. Our team is processing it — we\'ll update you soon.',
+          { channel: channel.toUpperCase() });
+        return INFO('Already Requested', already);
+      }
+    }
+    const name = user ? [user.first_name, user.last_name].filter(Boolean).join(' ') : (enquiry?.full_name || enquiry?.firstname || '');
+    const audience_options = [
+      { id: 'all', title: 'All Voters' },
+      { id: 'booth', title: 'By Booth' },
+      { id: 'section', title: 'By Section' },
+    ];
+    // Note: Flow Dropdown items must have a non-empty id — use 'all' as the
+    // "no filter" sentinel (normalized back to '' on submission).
+    let booth_options = [{ id: 'all', title: 'All Booths' }];
+    try {
+      const asmNo = user?.assembly_id || enquiry?.assembly_id;
+      if (asmNo) {
+        const bo = await boothOptionsForAssembly(String(asmNo));
+        if (Array.isArray(bo) && bo.length) booth_options = booth_options.concat(bo.slice(0, 100));
+      }
+    } catch { /* ignore */ }
+    const section_options = [{ id: 'all', title: 'All Sections' }];
+    const base = { init_name: name, init_phone: `91${cleanMobile}`, audience_options, booth_options, section_options };
+    if (channel === 'whatsapp') return { version: '3.0', screen: 'WA_FORM', data: base };
+    if (channel === 'audio') return { version: '3.0', screen: 'AUDIO_FORM', data: base };
+    if (channel === 'sms') return { version: '3.0', screen: 'SMS_FORM', data: { ...base, language_options: [{ id: 'ta', title: 'Tamil' }, { id: 'en', title: 'English' }, { id: 'te', title: 'Telugu' }, { id: 'hi', title: 'Hindi' }] } };
+    return INFO('EDMS', 'Please type *hi* to open the menu again.');
+  }
+
+  // Fallback
+  return INFO('EDMS', 'Please type *hi* to open the menu again.');
+}
+
+// Statuses that count as an open request for the "already requested" guard.
+const OPEN_REQUEST_STATUSES = ['pending', 'awaiting_audio', 'processing'];
+
+// Create a Razorpay hosted payment link (rzp.io) for a Ward subscription and
+// return its URL. Mirrors paymentController.createWardOrder's link creation so
+// the existing payment.captured webhook auto-marks the user paid.
+async function createServicesPaymentLink({ mobile, name, email, boothCount, userId }) {
+  const key = process.env.RAZORPAY_KEY;
+  const secret = process.env.RAZORPAY_SECRET;
+  if (!key || !secret) return { url: null, pricing: calculateWardPricing(boothCount) };
+  const pricing = calculateWardPricing(boothCount, mobile);
+  const auth = Buffer.from(`${key}:${secret}`).toString('base64');
+  const rawMobile = String(mobile || '').replace(/\D/g, '');
+  const contact = rawMobile.length === 10 ? `+91${rawMobile}` : (rawMobile ? `+${rawMobile}` : undefined);
+  const resp = await fetch('https://api.razorpay.com/v1/payment_links', {
+    method: 'POST',
+    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      amount: pricing.amountPaise,
+      currency: 'INR',
+      accept_partial: false,
+      description: `EDMS Ward Subscription (${pricing.boothCount} Booths)`,
+      reference_id: `wa_${rawMobile}_${Date.now()}`,
+      customer: { name: name || 'EDMS Candidate', contact, email: email || (rawMobile ? `${rawMobile}@election2026.in` : undefined) },
+      notes: { booth_count: pricing.boothCount, user_id: userId || '', source: 'whatsapp_flow' },
+      callback_url: 'https://election2026sir.in/ward/dashboard?payment=success',
+      callback_method: 'get',
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await resp.json();
+  if (!resp.ok || !data.short_url) throw new Error(data?.error?.description || 'payment link failed');
+  const nameEnc = encodeURIComponent(name || 'EDMS Candidate');
+  return { url: `${data.short_url}?contact=${rawMobile}&name=${nameEnc}`, pricing };
+}
+
+/**
+ * Handle a completed Choose-Service submission (social media request or purchase).
+ */
+async function handleServicesComplete(phone, payload) {
+  const db = getAppDb();
+  const cleanMobile = String(phone).replace(/\D/g, '').slice(-10);
+  const user = await db.collection('tbl_user').findOne({ mobile_no: cleanMobile });
+  const enquiry = await db.collection('tbl_enquiry').findOne({ mobile: cleanMobile });
+  const name = user ? [user.first_name, user.last_name].filter(Boolean).join(' ') : (enquiry?.full_name || enquiry?.firstname || 'User');
+
+  // ─── Purchase ───
+  if (payload.kind === 'purchase') {
+    if (String(user?.paid_status || enquiry?.paid_status || 'No').toLowerCase() === 'yes') {
+      await sendText(phone, `You already have an active EDMS subscription, *${name}*.`);
+      return;
+    }
+    const boothCount = Array.isArray(user?.booths) ? user.booths.length : 1;
+    try {
+      const { url, pricing } = await createServicesPaymentLink({
+        mobile: cleanMobile, name, email: user?.email, boothCount, userId: user ? String(user._id) : '',
+      });
+      if (!url) { await sendText(phone, 'Payment is temporarily unavailable. Please try again later or contact support.'); return; }
+      const intro = await getFlowMessageText('svc_purchase_link_text',
+        '*EDMS Subscription*\n\nBooths: {booths}\nAmount: ₹{amount} (incl. 18% GST)\n\nTap the secure link below to pay. Your PRO features unlock automatically after payment.',
+        { booths: pricing.boothCount, amount: pricing.totalAmount.toLocaleString('en-IN') });
+      await sendUrlButtonMessage(phone, { bodyText: intro, headerText: 'EDMS Subscription', btnText: 'Pay Now', btnUrl: url, headerType: 'text' });
+      await saveCrmMessage({ phone: cleanMobile, direction: 'outgoing', type: 'interactive', body: intro, contactName: name, metadata: { action: 'sent_payment_link', paymentUrl: url, booth_count: pricing.boothCount, amount: pricing.totalAmount } });
+    } catch (e) {
+      console.error('[svc purchase]', e.message);
+      await sendText(phone, 'Sorry, we could not generate your payment link right now. Please try again shortly.');
+    }
+    return;
+  }
+
+  // ─── Social media request ───
+  if (payload.kind === 'social_request') {
+    const channel = payload.channel || 'whatsapp';
+    // Already-requested guard: one open request per channel.
+    const open = await db.collection('tbl_social_request').findOne({ mobile: cleanMobile, channel, status: { $in: OPEN_REQUEST_STATUSES } });
+    if (open) {
+      const already = await getFlowMessageText('svc_social_already_text',
+        'You already have a pending *{channel}* request. Our team is processing it — we\'ll update you soon.',
+        { channel: channel.toUpperCase() });
+      await sendText(phone, already);
+      return;
+    }
+
+    const isAudio = channel === 'audio';
+    const audienceAll = (payload.audience || 'all') === 'all';
+    const booth = (payload.booth && payload.booth !== 'all') ? payload.booth : '';
+    const section = (payload.section && payload.section !== 'all') ? payload.section : '';
+
+    // Download any flow-uploaded media (image/audio) and re-host on Cloudinary so
+    // the admin registration view can preview/download it.
+    const docsArr = Array.isArray(payload.document) ? payload.document : (payload.document ? [payload.document] : []);
+    const hasAttachment = docsArr.length > 0;
+    const media_urls = [];
+    let image_url = null, audio_url = '', file_name = null, has_image = false, has_audio = false;
+    for (const it of docsArr) {
+      const m = await downloadFlowMediaToCloudinary(it);
+      if (!m) continue;
+      media_urls.push(m.url);
+      file_name = file_name || m.filename;
+      if (m.mime.includes('audio')) { has_audio = true; audio_url = audio_url || m.url; }
+      else { has_image = true; image_url = image_url || m.url; }
+    }
+
+    // Store using the schema the admin registration view expects (candidate_mobile,
+    // service_type, message_content, booth_no/section_no, media_urls…) while also
+    // keeping mobile/channel for the internal already-requested guard.
+    const doc = {
+      mobile: cleanMobile,
+      candidate_mobile: cleanMobile,
+      ward_username: cleanMobile,
+      name: payload.req_name || name,
+      channel,
+      service_type: isAudio ? 'voice' : channel,
+      audience: payload.audience || 'all',
+      all_voters: audienceAll,
+      booth,
+      booth_no: audienceAll ? 'All' : (booth || null),
+      section,
+      section_no: section || null,
+      language: payload.language || '',
+      content: payload.content || '',
+      message_content: payload.content || '',
+      document: docsArr.length ? docsArr : null,
+      media_urls,
+      image_url,
+      audio_url,
+      has_image,
+      has_audio,
+      file_name,
+      assembly_id: user?.assembly_id || enquiry?.assembly_id || '',
+      user_id: user ? String(user._id) : '',
+      // Audio without an in-flow upload still falls back to a chat follow-up.
+      status: (isAudio && !hasAttachment) ? 'awaiting_audio' : 'pending',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    await db.collection('tbl_social_request').insertOne(doc);
+
+    if (isAudio && !hasAttachment) {
+      // No in-flow audio — prompt for a chat follow-up (plain text, no CTA).
+      const confirm = await getFlowMessageText('svc_social_audio_text',
+        'Your *Audio SMS* request is saved.\n\nPlease reply here with your audio file (mp3) now, and we\'ll attach it to your broadcast.');
+      await sendText(phone, confirm);
+      await saveCrmMessage({ phone: cleanMobile, direction: 'outgoing', type: 'text', body: confirm, contactName: doc.name, metadata: { action: 'social_request_created', channel, status: doc.status } });
+      return;
+    }
+    // Submitted — confirmation with a header image + Choose Service button.
+    const confirm = await getFlowMessageText('svc_social_submitted_text',
+      'Your *{channel}* broadcast request has been received, *{name}*.\n\nOur team will process it shortly.',
+      { channel: channel.toUpperCase(), name: doc.name });
+    await sendServiceMenuReply(phone, confirm, 'svc_request_done_header');
+    await saveCrmMessage({ phone: cleanMobile, direction: 'outgoing', type: 'interactive', body: confirm, contactName: doc.name, metadata: { action: 'social_request_created', channel, status: doc.status } });
+    return;
+  }
+}
+
+// Send a message with an admin-managed header image, a body and a Choose Service
+// button that re-opens the services menu flow. Used for post-action confirmations.
+async function sendServiceMenuReply(phone, bodyText, headerKey) {
+  const cleanMobile = String(phone).replace(/\D/g, '').slice(-10);
+  const hdr = headerKey ? await getFlowAsset(headerKey) : null;
+  return sendFlowMessage(phone, {
+    flowId: SERVICES_FLOW_ID,
+    flowCta: 'Choose Service',
+    flowAction: 'data_exchange',
+    bodyText,
+    headerUrl: hdr?.headerUrl || null,
+    headerType: hdr?.headerUrl ? (hdr.headerType || 'image') : 'text',
+    headerText: hdr?.headerUrl ? undefined : 'EDMS',
+    flowToken: `svc_${cleanMobile}`,
+    footerText: 'EDMS',
+  });
+}
+
+// Attach an incoming audio/voice file to the contact's audio request awaiting one.
+async function attachAudioToPendingRequest(phone, media) {
+  const db = getAppDb();
+  const cleanMobile = String(phone).replace(/\D/g, '').slice(-10);
+  const pending = await db.collection('tbl_social_request').findOne(
+    { mobile: cleanMobile, channel: 'audio', status: 'awaiting_audio' },
+    { sort: { created_at: -1 } }
+  );
+  if (!pending) return;
+  await db.collection('tbl_social_request').updateOne(
+    { _id: pending._id },
+    { $set: { audio_url: media.mediaUrl, audio_mime: media.mime || '', has_audio: true, media_urls: [media.mediaUrl], file_name: media.filename || 'audio_message.mp3', status: 'pending', updated_at: new Date().toISOString() } }
+  );
+  const msg = await getFlowMessageText('svc_social_audio_received_text',
+    'Got your audio! Your *Audio SMS* broadcast request is now complete and queued for our team.');
+  await sendText(phone, msg);
+  await saveCrmMessage({ phone: cleanMobile, direction: 'outgoing', type: 'text', body: msg, metadata: { action: 'social_audio_attached', requestId: String(pending._id) } });
+}
+
+// Registration-flow screen logic, shared by the standalone registration flow
+// endpoint and the "Register" path inside the Choose-Service flow. Returns the
+// { version, screen, data } response for a given registration screen, or null.
+async function registrationScreenResponse({ action, screen, data = {}, db }) {
+  if (action === 'INIT' || !screen) {
+    return { version: '3.0', screen: 'WELCOME', data: {} };
+  }
+  if (screen === 'WELCOME') {
+    const isAffiliated = data.affiliation === 'affiliated';
+    if (isAffiliated) {
+      return {
+        version: '3.0', screen: 'PARTY_SELECT',
+        data: { full_name: data.full_name || '', role: data.role || '', affiliation: data.affiliation || '', party_options: await buildPartyOptions(db) },
+      };
+    }
+    return {
+      version: '3.0', screen: 'LOCAL_BODY_SELECT',
+      data: { full_name: data.full_name || '', role: data.role || '', affiliation: data.affiliation || 'independent', party: 'Independent' },
+    };
+  }
+  if (screen === 'PARTY_SELECT') {
+    return {
+      version: '3.0', screen: 'LOCAL_BODY_SELECT',
+      data: { full_name: data.full_name || '', role: data.role || '', affiliation: data.affiliation || 'affiliated', party: data.party || 'BJP' },
+    };
+  }
+  if (screen === 'LOCAL_BODY_SELECT') {
+    const isUrban = data.body_type === 'urban';
+    const positionOptions = (isUrban ? URBAN_POSITIONS : RURAL_POSITIONS).map((p) => ({ id: p, title: p }));
+    return {
+      version: '3.0', screen: 'POSITION_SELECT',
+      data: { full_name: data.full_name || '', role: data.role || '', affiliation: data.affiliation || '', party: data.party || 'Independent', body_type: data.body_type || 'urban', position_options: positionOptions },
+    };
+  }
+  if (screen === 'POSITION_SELECT') {
+    const districtList = districtsFor(data.position);
+    return {
+      version: '3.0', screen: 'DISTRICT_SELECT',
+      data: { full_name: data.full_name || '', role: data.role || '', affiliation: data.affiliation || '', party: data.party || 'Independent', body_type: data.body_type || 'urban', position: data.position || '', district_options: districtList.map((d) => ({ id: d, title: d })) },
+    };
+  }
+  if (screen === 'DISTRICT_SELECT') {
+    const selectedDistrict = String(data.district || '').trim();
+    let assemblyOptions = [];
+    try {
+      const assemblies = await assembliesForDistrict(db, selectedDistrict);
+      assemblyOptions = assemblies.slice(0, MAX_FLOW_OPTIONS).map((a) => ({ id: String(a.assembly_no), title: `No. ${a.assembly_no} - ${a.assembly_name || 'Assembly'}`.slice(0, 100) }));
+    } catch (e) {
+      console.error('[Flow Endpoint Assembly Fetch Error]:', e.message);
+    }
+    return {
+      version: '3.0', screen: 'ASSEMBLY_SELECT',
+      data: { full_name: data.full_name || '', role: data.role || '', affiliation: data.affiliation || '', party: data.party || 'Independent', body_type: data.body_type || 'urban', position: data.position || '', district: selectedDistrict, assembly_options: assemblyOptions.length > 0 ? assemblyOptions : [{ id: '0', title: 'No assemblies found' }] },
+    };
+  }
+  if (screen === 'ASSEMBLY_SELECT') {
+    const selectedAssemblyNo = data.assembly_name || '';
+    const boothOptions = await boothOptionsForAssembly(selectedAssemblyNo);
+    return {
+      version: '3.0', screen: 'BOOTH_SELECT',
+      data: { full_name: data.full_name || '', role: data.role || '', affiliation: data.affiliation || '', party: data.party || 'Independent', body_type: data.body_type || 'urban', position: data.position || '', district: data.district || '', assembly_name: selectedAssemblyNo, booth_options: boothOptions },
+    };
+  }
+  if (screen === 'BOOTH_SELECT') {
+    const assemblyDisplay = await assemblyNameByNo(db, data.assembly_name);
+    const selectedBooths = normalizeBooths(data.booth_numbers);
+    const boothLabel = summarizeBooths(selectedBooths);
+    const summaryText = buildSummaryTable({
+      full_name: data.full_name, role: data.role, affiliation: data.affiliation, party: data.party,
+      body_type: data.body_type, position: data.position, district: data.district, assembly: assemblyDisplay, booths: boothLabel,
+    });
+    return {
+      version: '3.0', screen: 'SUMMARY_SUBMIT',
+      data: { full_name: data.full_name || '', role: data.role || '', affiliation: data.affiliation || '', party: data.party || 'Independent', body_type: data.body_type || 'urban', position: data.position || '', district: data.district || '', assembly_name: data.assembly_name || '', booth_numbers: selectedBooths, summary_text: summaryText },
+    };
+  }
+  return null;
+}
+
+// Registration screens reachable inside the Choose-Service flow.
+const REGISTRATION_SCREENS = new Set(['WELCOME', 'PARTY_SELECT', 'LOCAL_BODY_SELECT', 'POSITION_SELECT', 'DISTRICT_SELECT', 'ASSEMBLY_SELECT', 'BOOTH_SELECT']);
 
 /**
  * POST /api/whatsapp-flow-endpoint — Meta Flow Dynamic Data Exchange Endpoint
@@ -918,177 +1536,13 @@ export async function flowEndpoint(req, res) {
           status: 'active',
         },
       };
-    } else if (action === 'INIT' || !screen) {
-      responseObj = {
-        version: '3.0',
-        screen: 'WELCOME',
-        data: {},
-      };
-    } else if (screen === 'WELCOME') {
-      const isAffiliated = data.affiliation === 'affiliated';
-      if (isAffiliated) {
-        responseObj = {
-          version: '3.0',
-          screen: 'PARTY_SELECT',
-          data: {
-            full_name: data.full_name || '',
-            role: data.role || '',
-            affiliation: data.affiliation || '',
-            party_options: await buildPartyOptions(db),
-          },
-        };
-      } else {
-        responseObj = {
-          version: '3.0',
-          screen: 'LOCAL_BODY_SELECT',
-          data: {
-            full_name: data.full_name || '',
-            role: data.role || '',
-            affiliation: data.affiliation || 'independent',
-            party: 'Independent',
-          },
-        };
-      }
-    } else if (screen === 'PARTY_SELECT') {
-      responseObj = {
-        version: '3.0',
-        screen: 'LOCAL_BODY_SELECT',
-        data: {
-          full_name: data.full_name || '',
-          role: data.role || '',
-          affiliation: data.affiliation || 'affiliated',
-          party: data.party || 'BJP',
-        },
-      };
-    } else if (screen === 'LOCAL_BODY_SELECT') {
-      // Position options mirror the web register page exactly:
-      // urban -> Town Panchayat / Municipality / Corporation (3 options)
-      // rural -> 4 panchayat-level positions.
-      const isUrban = data.body_type === 'urban';
-      const positionOptions = (isUrban ? URBAN_POSITIONS : RURAL_POSITIONS).map((p) => ({ id: p, title: p }));
-
-      responseObj = {
-        version: '3.0',
-        screen: 'POSITION_SELECT',
-        data: {
-          full_name: data.full_name || '',
-          role: data.role || '',
-          affiliation: data.affiliation || '',
-          party: data.party || 'Independent',
-          body_type: data.body_type || 'urban',
-          position_options: positionOptions,
-        },
-      };
-    } else if (screen === 'POSITION_SELECT') {
-      // Districts depend on the chosen position (same rule as the web page):
-      // urban positions restrict to districts that have that body type; rural
-      // positions span all districts.
-      const districtList = districtsFor(data.position);
-
-      responseObj = {
-        version: '3.0',
-        screen: 'DISTRICT_SELECT',
-        data: {
-          full_name: data.full_name || '',
-          role: data.role || '',
-          affiliation: data.affiliation || '',
-          party: data.party || 'Independent',
-          body_type: data.body_type || 'urban',
-          position: data.position || '',
-          district_options: districtList.map((d) => ({ id: d, title: d })),
-        },
-      };
-    } else if (screen === 'DISTRICT_SELECT') {
-      // Assemblies for the chosen district, straight from tbl_assembly_consitituency.
-      // Option id = assembly_no (the reliable key used to fetch booths next).
-      const selectedDistrict = String(data.district || '').trim();
-      let assemblyOptions = [];
-      try {
-        const assemblies = await assembliesForDistrict(db, selectedDistrict);
-        assemblyOptions = assemblies.slice(0, MAX_FLOW_OPTIONS).map((a) => ({
-          id: String(a.assembly_no),
-          title: `No. ${a.assembly_no} - ${a.assembly_name || 'Assembly'}`.slice(0, 100),
-        }));
-      } catch (e) {
-        console.error('[Flow Endpoint Assembly Fetch Error]:', e.message);
-      }
-
-      responseObj = {
-        version: '3.0',
-        screen: 'ASSEMBLY_SELECT',
-        data: {
-          full_name: data.full_name || '',
-          role: data.role || '',
-          affiliation: data.affiliation || '',
-          party: data.party || 'Independent',
-          body_type: data.body_type || 'urban',
-          position: data.position || '',
-          district: selectedDistrict,
-          assembly_options: assemblyOptions.length > 0 ? assemblyOptions : [{ id: '0', title: 'No assemblies found' }],
-        },
-      };
-    } else if (screen === 'ASSEMBLY_SELECT') {
-      // data.assembly_name holds the selected assembly_no (the option id). Pull
-      // the real booths for that assembly from the voter DB.
-      const selectedAssemblyNo = data.assembly_name || '';
-      const boothOptions = await boothOptionsForAssembly(selectedAssemblyNo);
-
-      responseObj = {
-        version: '3.0',
-        screen: 'BOOTH_SELECT',
-        data: {
-          full_name: data.full_name || '',
-          role: data.role || '',
-          affiliation: data.affiliation || '',
-          party: data.party || 'Independent',
-          body_type: data.body_type || 'urban',
-          position: data.position || '',
-          district: data.district || '',
-          assembly_name: selectedAssemblyNo,
-          booth_options: boothOptions,
-        },
-      };
-    } else if (screen === 'BOOTH_SELECT') {
-      // assembly_name holds the assembly_no; resolve its display name for the summary.
-      const assemblyDisplay = await assemblyNameByNo(db, data.assembly_name);
-      // booth_numbers is a multi-select array from the CheckboxGroup.
-      const selectedBooths = normalizeBooths(data.booth_numbers);
-      const boothLabel = summarizeBooths(selectedBooths);
-      // Render the summary as a Markdown table for the RichText component.
-      const summaryText = buildSummaryTable({
-        full_name: data.full_name,
-        role: data.role,
-        affiliation: data.affiliation,
-        party: data.party,
-        body_type: data.body_type,
-        position: data.position,
-        district: data.district,
-        assembly: assemblyDisplay,
-        booths: boothLabel,
-      });
-
-      responseObj = {
-        version: '3.0',
-        screen: 'SUMMARY_SUBMIT',
-        data: {
-          full_name: data.full_name || '',
-          role: data.role || '',
-          affiliation: data.affiliation || '',
-          party: data.party || 'Independent',
-          body_type: data.body_type || 'urban',
-          position: data.position || '',
-          district: data.district || '',
-          assembly_name: data.assembly_name || '',
-          booth_numbers: selectedBooths,
-          summary_text: summaryText,
-        },
-      };
+    } else if (String(flow_token || '').startsWith('svc_')) {
+      // "Choose Service" menu flow — separate from the registration flow.
+      responseObj = await handleServicesFlow({ action, screen, data, flow_token, db });
     } else {
-      responseObj = {
-        version: '3.0',
-        screen: 'WELCOME',
-        data: {},
-      };
+      // Standalone registration flow (shared screen logic).
+      responseObj = await registrationScreenResponse({ action, screen, data, db })
+        || { version: '3.0', screen: 'WELCOME', data: {} };
     }
 
     if (isEncrypted && aesKey && initialVector) {

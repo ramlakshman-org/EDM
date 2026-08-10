@@ -28,16 +28,16 @@ export default function Login() {
       <div className="tricolor-bar" />
       <div className="gov-login-bg">
         <form className="gov-login-card" onSubmit={submit}>
+          <div style={{ textAlign: 'center', marginBottom: 14 }}>
+            <img src="/EDM-fav.png" alt="EDMS" style={{ height: 72, width: 'auto' }} />
+          </div>
           <div className="portal-title">Election Data Management</div>
           <div className="portal-sub">Government Portal · Secure Login</div>
-          <div style={{ textAlign: 'center', marginBottom: 18 }}>
-            <span className="gov-badge">🛡 Secure Access</span>
-          </div>
           {err && <div className="alert err">{err}</div>}
           <label>Username / Mobile</label>
-          <input placeholder="Enter your username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+          <input inputMode="numeric" placeholder="Enter your username" value={username} onChange={(e) => setUsername(e.target.value)} required />
           <label>Password</label>
-          <input type="password" placeholder="Enter your password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <input type="password" inputMode="numeric" placeholder="Enter your password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           <button className="gov-btn" disabled={loading}>{loading ? 'Signing in…' : 'Login'}</button>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed #cfd8dc', paddingTop: 16, marginTop: 16 }}>
             <span className="muted">Forgot password?</span>

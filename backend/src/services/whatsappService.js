@@ -98,6 +98,22 @@ export async function sendFlowMessage(to, options = {}) {
   const flowStatus = (process.env.WHATSAPP_FLOW_STATUS || 'PUBLISHED').toUpperCase();
   const mode = flowStatus === 'PUBLISHED' ? 'published' : 'draft';
 
+  // 'navigate' opens a static first screen (registration flow's WELCOME).
+  // 'data_exchange' asks the flow endpoint for the first screen via INIT — used
+  // by fully-dynamic flows like the Choose-Service menu (first screen built server-side).
+  const flowAction = options.flowAction || 'navigate';
+  const parameters = {
+    flow_message_version: '3',
+    flow_token: flowToken,
+    flow_id: flowId,
+    flow_cta: flowCta,
+    mode,
+    flow_action: flowAction,
+  };
+  if (flowAction === 'navigate') {
+    parameters.flow_action_payload = options.flowActionPayload || { screen: 'WELCOME' };
+  }
+
   const payload = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
@@ -110,17 +126,7 @@ export async function sendFlowMessage(to, options = {}) {
       footer: { text: footerText.slice(0, 60) },
       action: {
         name: 'flow',
-        parameters: {
-          flow_message_version: '3',
-          flow_token: flowToken,
-          flow_id: flowId,
-          flow_cta: flowCta,
-          mode,
-          flow_action: 'navigate',
-          flow_action_payload: {
-            screen: 'WELCOME',
-          },
-        },
+        parameters,
       },
     },
   };

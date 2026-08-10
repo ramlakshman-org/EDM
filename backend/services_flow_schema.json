@@ -1,0 +1,1516 @@
+{
+  "version": "7.0",
+  "data_api_version": "3.0",
+  "routing_model": {
+    "SERVICE_SELECT": [
+      "BENEFITS",
+      "FAQ",
+      "SOCIAL_SELECT",
+      "PURCHASE",
+      "INFO",
+      "WELCOME"
+    ],
+    "SOCIAL_SELECT": [
+      "WA_FORM",
+      "AUDIO_FORM",
+      "SMS_FORM",
+      "INFO"
+    ],
+    "BENEFITS": [],
+    "FAQ": [],
+    "WA_FORM": [],
+    "AUDIO_FORM": [],
+    "SMS_FORM": [],
+    "PURCHASE": [],
+    "INFO": [],
+    "WELCOME": [
+      "PARTY_SELECT",
+      "LOCAL_BODY_SELECT"
+    ],
+    "PARTY_SELECT": [
+      "LOCAL_BODY_SELECT"
+    ],
+    "LOCAL_BODY_SELECT": [
+      "POSITION_SELECT"
+    ],
+    "POSITION_SELECT": [
+      "DISTRICT_SELECT"
+    ],
+    "DISTRICT_SELECT": [
+      "ASSEMBLY_SELECT"
+    ],
+    "ASSEMBLY_SELECT": [
+      "BOOTH_SELECT"
+    ],
+    "BOOTH_SELECT": [
+      "SUMMARY_SUBMIT"
+    ],
+    "SUMMARY_SUBMIT": []
+  },
+  "screens": [
+    {
+      "id": "SERVICE_SELECT",
+      "title": "Choose Service",
+      "data": {
+        "welcome_banner": {
+          "type": "string",
+          "__example__": "iVBORw0KGgo"
+        },
+        "has_welcome_banner": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "menu_heading": {
+          "type": "string",
+          "__example__": "Select a service"
+        },
+        "services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "register",
+              "title": "Register",
+              "description": "Create your EDMS account"
+            },
+            {
+              "id": "demo",
+              "title": "Demo",
+              "description": "Watch a quick demo"
+            },
+            {
+              "id": "benefits",
+              "title": "Benefits",
+              "description": "Why EDMS"
+            },
+            {
+              "id": "faq",
+              "title": "FAQ",
+              "description": "Common questions"
+            },
+            {
+              "id": "website",
+              "title": "Website",
+              "description": "Visit our website"
+            },
+            {
+              "id": "support",
+              "title": "Support",
+              "description": "Talk to our team"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Image",
+            "src": "${data.welcome_banner}",
+            "width": 1000,
+            "height": 125,
+            "scale-type": "cover",
+            "alt-text": "EDMS",
+            "visible": "${data.has_welcome_banner}"
+          },
+          {
+            "type": "RadioButtonsGroup",
+            "name": "selected_service",
+            "label": "${data.menu_heading}",
+            "required": true,
+            "data-source": "${data.services}"
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "selected_service": "${form.selected_service}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "BENEFITS",
+      "title": "Benefits",
+      "terminal": true,
+      "success": true,
+      "data": {
+        "banner": {
+          "type": "string",
+          "__example__": "iVBORw0KGgo"
+        },
+        "has_banner": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "content": {
+          "type": "string",
+          "__example__": "EDMS benefits..."
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Image",
+            "src": "${data.banner}",
+            "width": 1000,
+            "height": 125,
+            "scale-type": "cover",
+            "alt-text": "Benefits",
+            "visible": "${data.has_banner}"
+          },
+          {
+            "type": "TextHeading",
+            "text": "Benefits of EDMS"
+          },
+          {
+            "type": "TextBody",
+            "text": "${data.content}"
+          },
+          {
+            "type": "Footer",
+            "label": "Close",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {}
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "FAQ",
+      "title": "FAQ",
+      "terminal": true,
+      "success": true,
+      "data": {
+        "banner": {
+          "type": "string",
+          "__example__": "iVBORw0KGgo"
+        },
+        "has_banner": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "content": {
+          "type": "string",
+          "__example__": "FAQ..."
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Image",
+            "src": "${data.banner}",
+            "width": 1000,
+            "height": 125,
+            "scale-type": "cover",
+            "alt-text": "FAQ",
+            "visible": "${data.has_banner}"
+          },
+          {
+            "type": "TextHeading",
+            "text": "Frequently Asked Questions"
+          },
+          {
+            "type": "TextBody",
+            "text": "${data.content}"
+          },
+          {
+            "type": "Footer",
+            "label": "Close",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {}
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "SOCIAL_SELECT",
+      "title": "Social Media Request",
+      "data": {
+        "banner": {
+          "type": "string",
+          "__example__": "iVBORw0KGgo"
+        },
+        "has_banner": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "whatsapp",
+              "title": "WhatsApp",
+              "description": "WhatsApp broadcast"
+            },
+            {
+              "id": "audio",
+              "title": "Audio SMS",
+              "description": "Voice call broadcast"
+            },
+            {
+              "id": "sms",
+              "title": "SMS Broadcast",
+              "description": "Text SMS broadcast"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Image",
+            "src": "${data.banner}",
+            "width": 1000,
+            "height": 125,
+            "scale-type": "cover",
+            "alt-text": "Social Media Request",
+            "visible": "${data.has_banner}"
+          },
+          {
+            "type": "TextBody",
+            "text": "Choose a channel for your broadcast request."
+          },
+          {
+            "type": "RadioButtonsGroup",
+            "name": "social_channel",
+            "label": "Select channel",
+            "required": true,
+            "data-source": "${data.channels}"
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "social_channel": "${form.social_channel}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "WA_FORM",
+      "title": "WhatsApp Request",
+      "terminal": true,
+      "success": true,
+      "data": {
+        "init_name": {
+          "type": "string",
+          "__example__": "Perivi"
+        },
+        "init_phone": {
+          "type": "string",
+          "__example__": "918106811285"
+        },
+        "audience_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "all",
+              "title": "All Voters"
+            }
+          ]
+        },
+        "booth_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "",
+              "title": "All Booths"
+            }
+          ]
+        },
+        "section_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "",
+              "title": "All Sections"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "WhatsApp Broadcast Request"
+          },
+          {
+            "type": "TextInput",
+            "name": "req_name",
+            "label": "Name",
+            "enabled": false,
+            "init-value": "${data.init_name}"
+          },
+          {
+            "type": "TextInput",
+            "name": "req_mobile",
+            "label": "Mobile",
+            "input-type": "phone",
+            "enabled": false,
+            "init-value": "${data.init_phone}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "audience",
+            "label": "Target Audience",
+            "required": true,
+            "data-source": "${data.audience_options}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "booth",
+            "label": "Booth",
+            "data-source": "${data.booth_options}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "section",
+            "label": "Section",
+            "data-source": "${data.section_options}"
+          },
+          {
+            "type": "TextArea",
+            "name": "content",
+            "label": "WhatsApp message",
+            "required": true,
+            "helper-text": "The message to broadcast."
+          },
+          {
+            "type": "DocumentPicker",
+            "name": "document",
+            "label": "Attach document",
+            "description": "Upload an image or file to broadcast.",
+            "min-uploaded-documents": 0,
+            "max-uploaded-documents": 1
+          },
+          {
+            "type": "Footer",
+            "label": "Submit Request",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {
+                "kind": "social_request",
+                "channel": "whatsapp",
+                "req_name": "${form.req_name}",
+                "audience": "${form.audience}",
+                "booth": "${form.booth}",
+                "section": "${form.section}",
+                "content": "${form.content}",
+                "document": "${form.document}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "AUDIO_FORM",
+      "title": "Audio SMS Request",
+      "terminal": true,
+      "success": true,
+      "data": {
+        "init_name": {
+          "type": "string",
+          "__example__": "Perivi"
+        },
+        "init_phone": {
+          "type": "string",
+          "__example__": "918106811285"
+        },
+        "audience_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "all",
+              "title": "All Voters"
+            }
+          ]
+        },
+        "booth_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "",
+              "title": "All Booths"
+            }
+          ]
+        },
+        "section_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "",
+              "title": "All Sections"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "Audio SMS (Voice) Request"
+          },
+          {
+            "type": "TextInput",
+            "name": "req_name",
+            "label": "Name",
+            "enabled": false,
+            "init-value": "${data.init_name}"
+          },
+          {
+            "type": "TextInput",
+            "name": "req_mobile",
+            "label": "Mobile",
+            "input-type": "phone",
+            "enabled": false,
+            "init-value": "${data.init_phone}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "audience",
+            "label": "Target Audience",
+            "required": true,
+            "data-source": "${data.audience_options}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "booth",
+            "label": "Booth",
+            "data-source": "${data.booth_options}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "section",
+            "label": "Section",
+            "data-source": "${data.section_options}"
+          },
+          {
+            "type": "DocumentPicker",
+            "name": "document",
+            "label": "Upload audio file",
+            "description": "Upload your audio (mp3) file to broadcast.",
+            "min-uploaded-documents": 1,
+            "max-uploaded-documents": 1
+          },
+          {
+            "type": "Footer",
+            "label": "Submit Request",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {
+                "kind": "social_request",
+                "channel": "audio",
+                "req_name": "${form.req_name}",
+                "audience": "${form.audience}",
+                "booth": "${form.booth}",
+                "section": "${form.section}",
+                "document": "${form.document}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "SMS_FORM",
+      "title": "SMS Broadcast Request",
+      "terminal": true,
+      "success": true,
+      "data": {
+        "init_name": {
+          "type": "string",
+          "__example__": "Perivi"
+        },
+        "init_phone": {
+          "type": "string",
+          "__example__": "918106811285"
+        },
+        "audience_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "all",
+              "title": "All Voters"
+            }
+          ]
+        },
+        "booth_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "",
+              "title": "All Booths"
+            }
+          ]
+        },
+        "section_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "",
+              "title": "All Sections"
+            }
+          ]
+        },
+        "language_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "ta",
+              "title": "Tamil"
+            },
+            {
+              "id": "en",
+              "title": "English"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "SMS Broadcast Request"
+          },
+          {
+            "type": "TextInput",
+            "name": "req_name",
+            "label": "Name",
+            "enabled": false,
+            "init-value": "${data.init_name}"
+          },
+          {
+            "type": "TextInput",
+            "name": "req_mobile",
+            "label": "Mobile",
+            "input-type": "phone",
+            "enabled": false,
+            "init-value": "${data.init_phone}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "audience",
+            "label": "Target Audience",
+            "required": true,
+            "data-source": "${data.audience_options}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "booth",
+            "label": "Booth",
+            "data-source": "${data.booth_options}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "section",
+            "label": "Section",
+            "data-source": "${data.section_options}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "language",
+            "label": "Language",
+            "required": true,
+            "data-source": "${data.language_options}"
+          },
+          {
+            "type": "TextArea",
+            "name": "content",
+            "label": "SMS message",
+            "required": true
+          },
+          {
+            "type": "Footer",
+            "label": "Submit Request",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {
+                "kind": "social_request",
+                "channel": "sms",
+                "req_name": "${form.req_name}",
+                "audience": "${form.audience}",
+                "booth": "${form.booth}",
+                "section": "${form.section}",
+                "language": "${form.language}",
+                "content": "${form.content}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "PURCHASE",
+      "title": "Subscription",
+      "terminal": true,
+      "success": true,
+      "data": {
+        "banner": {
+          "type": "string",
+          "__example__": "iVBORw0KGgo"
+        },
+        "has_banner": {
+          "type": "boolean",
+          "__example__": false
+        },
+        "plan_title": {
+          "type": "string",
+          "__example__": "Your EDMS Plan"
+        },
+        "plan_text": {
+          "type": "string",
+          "__example__": "Booths: 10\nAmount: ₹23,600"
+        },
+        "cta_label": {
+          "type": "string",
+          "__example__": "Pay Now"
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Image",
+            "src": "${data.banner}",
+            "width": 1000,
+            "height": 125,
+            "scale-type": "cover",
+            "alt-text": "Subscription",
+            "visible": "${data.has_banner}"
+          },
+          {
+            "type": "TextHeading",
+            "text": "${data.plan_title}"
+          },
+          {
+            "type": "TextBody",
+            "text": "${data.plan_text}"
+          },
+          {
+            "type": "Footer",
+            "label": "${data.cta_label}",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {
+                "kind": "purchase"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "INFO",
+      "title": "EDMS",
+      "terminal": true,
+      "success": true,
+      "data": {
+        "info_title": {
+          "type": "string",
+          "__example__": "Done"
+        },
+        "info_body": {
+          "type": "string",
+          "__example__": "Please check your chat."
+        },
+        "action": {
+          "type": "string",
+          "__example__": ""
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "${data.info_title}"
+          },
+          {
+            "type": "TextBody",
+            "text": "${data.info_body}"
+          },
+          {
+            "type": "Footer",
+            "label": "Close",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {
+                "kind": "svc_info",
+                "action": "${data.action}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "WELCOME",
+      "title": "Candidate Registration",
+      "terminal": false,
+      "data": {},
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextInput",
+            "name": "full_name",
+            "label": "Full Name",
+            "required": true
+          },
+          {
+            "type": "Dropdown",
+            "name": "role",
+            "label": "Your Role / Status",
+            "required": true,
+            "data-source": [
+              {
+                "id": "planning",
+                "title": "Planning to Contest"
+              },
+              {
+                "id": "confirmed",
+                "title": "Confirmed Candidate"
+              },
+              {
+                "id": "team",
+                "title": "Campaign Team Member"
+              },
+              {
+                "id": "functionary",
+                "title": "Party Functionary"
+              }
+            ]
+          },
+          {
+            "type": "Dropdown",
+            "name": "affiliation",
+            "label": "Party Affiliation",
+            "required": true,
+            "data-source": [
+              {
+                "id": "affiliated",
+                "title": "Affiliated with a party"
+              },
+              {
+                "id": "independent",
+                "title": "Independent"
+              }
+            ]
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "full_name": "${form.full_name}",
+                "role": "${form.role}",
+                "affiliation": "${form.affiliation}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "PARTY_SELECT",
+      "title": "Choose Party",
+      "terminal": false,
+      "data": {
+        "full_name": {
+          "type": "string",
+          "__example__": "John Doe"
+        },
+        "role": {
+          "type": "string",
+          "__example__": "planning"
+        },
+        "affiliation": {
+          "type": "string",
+          "__example__": "affiliated"
+        },
+        "party_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "BJP",
+              "title": "BJP",
+              "description": "Bharatiya Janata Party",
+              "image": ""
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "RadioButtonsGroup",
+            "name": "party",
+            "label": "Select Party",
+            "required": true,
+            "data-source": "${data.party_options}"
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "full_name": "${data.full_name}",
+                "role": "${data.role}",
+                "affiliation": "${data.affiliation}",
+                "party": "${form.party}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "LOCAL_BODY_SELECT",
+      "title": "Local Body Type",
+      "terminal": false,
+      "data": {
+        "full_name": {
+          "type": "string",
+          "__example__": "John Doe"
+        },
+        "role": {
+          "type": "string",
+          "__example__": "planning"
+        },
+        "affiliation": {
+          "type": "string",
+          "__example__": "independent"
+        },
+        "party": {
+          "type": "string",
+          "__example__": "Independent"
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Dropdown",
+            "name": "body_type",
+            "label": "Local Body Type",
+            "required": true,
+            "data-source": [
+              {
+                "id": "rural",
+                "title": "Rural Local Body (Panchayats)"
+              },
+              {
+                "id": "urban",
+                "title": "Urban Local Body (Municipal/Corp)"
+              }
+            ]
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "full_name": "${data.full_name}",
+                "role": "${data.role}",
+                "affiliation": "${data.affiliation}",
+                "party": "${data.party}",
+                "body_type": "${form.body_type}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "POSITION_SELECT",
+      "title": "Select Position",
+      "terminal": false,
+      "data": {
+        "full_name": {
+          "type": "string",
+          "__example__": "John Doe"
+        },
+        "role": {
+          "type": "string",
+          "__example__": "planning"
+        },
+        "affiliation": {
+          "type": "string",
+          "__example__": "independent"
+        },
+        "party": {
+          "type": "string",
+          "__example__": "Independent"
+        },
+        "body_type": {
+          "type": "string",
+          "__example__": "urban"
+        },
+        "position_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "Corporation",
+              "title": "Corporation Councillor"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Dropdown",
+            "name": "position",
+            "label": "Position Contesting",
+            "required": true,
+            "data-source": "${data.position_options}"
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "full_name": "${data.full_name}",
+                "role": "${data.role}",
+                "affiliation": "${data.affiliation}",
+                "party": "${data.party}",
+                "body_type": "${data.body_type}",
+                "position": "${form.position}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "DISTRICT_SELECT",
+      "title": "Select District",
+      "terminal": false,
+      "data": {
+        "full_name": {
+          "type": "string",
+          "__example__": "John Doe"
+        },
+        "role": {
+          "type": "string",
+          "__example__": "planning"
+        },
+        "affiliation": {
+          "type": "string",
+          "__example__": "independent"
+        },
+        "party": {
+          "type": "string",
+          "__example__": "Independent"
+        },
+        "body_type": {
+          "type": "string",
+          "__example__": "urban"
+        },
+        "position": {
+          "type": "string",
+          "__example__": "Corporation"
+        },
+        "district_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "Chennai",
+              "title": "Chennai"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Dropdown",
+            "name": "district",
+            "label": "Select District",
+            "required": true,
+            "data-source": "${data.district_options}"
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "full_name": "${data.full_name}",
+                "role": "${data.role}",
+                "affiliation": "${data.affiliation}",
+                "party": "${data.party}",
+                "body_type": "${data.body_type}",
+                "position": "${data.position}",
+                "district": "${form.district}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "ASSEMBLY_SELECT",
+      "title": "Select Assembly",
+      "terminal": false,
+      "data": {
+        "full_name": {
+          "type": "string",
+          "__example__": "John Doe"
+        },
+        "role": {
+          "type": "string",
+          "__example__": "planning"
+        },
+        "affiliation": {
+          "type": "string",
+          "__example__": "independent"
+        },
+        "party": {
+          "type": "string",
+          "__example__": "Independent"
+        },
+        "body_type": {
+          "type": "string",
+          "__example__": "urban"
+        },
+        "position": {
+          "type": "string",
+          "__example__": "Corporation"
+        },
+        "district": {
+          "type": "string",
+          "__example__": "Chennai"
+        },
+        "assembly_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "10",
+              "title": "10 - Thiruvottiyur"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "Dropdown",
+            "name": "assembly_name",
+            "label": "Select Assembly",
+            "required": true,
+            "data-source": "${data.assembly_options}"
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "full_name": "${data.full_name}",
+                "role": "${data.role}",
+                "affiliation": "${data.affiliation}",
+                "party": "${data.party}",
+                "body_type": "${data.body_type}",
+                "position": "${data.position}",
+                "district": "${data.district}",
+                "assembly_name": "${form.assembly_name}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "BOOTH_SELECT",
+      "title": "Select Booth Number",
+      "terminal": false,
+      "data": {
+        "full_name": {
+          "type": "string",
+          "__example__": "John Doe"
+        },
+        "role": {
+          "type": "string",
+          "__example__": "planning"
+        },
+        "affiliation": {
+          "type": "string",
+          "__example__": "independent"
+        },
+        "party": {
+          "type": "string",
+          "__example__": "Independent"
+        },
+        "body_type": {
+          "type": "string",
+          "__example__": "urban"
+        },
+        "position": {
+          "type": "string",
+          "__example__": "Corporation"
+        },
+        "district": {
+          "type": "string",
+          "__example__": "Chennai"
+        },
+        "assembly_name": {
+          "type": "string",
+          "__example__": "10 - Thiruvottiyur"
+        },
+        "booth_options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            }
+          },
+          "__example__": [
+            {
+              "id": "1",
+              "title": "Booth 1"
+            }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "CheckboxGroup",
+            "name": "booth_numbers",
+            "label": "Select Booth(s)",
+            "required": true,
+            "data-source": "${data.booth_options}"
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "full_name": "${data.full_name}",
+                "role": "${data.role}",
+                "affiliation": "${data.affiliation}",
+                "party": "${data.party}",
+                "body_type": "${data.body_type}",
+                "position": "${data.position}",
+                "district": "${data.district}",
+                "assembly_name": "${data.assembly_name}",
+                "booth_numbers": "${form.booth_numbers}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "SUMMARY_SUBMIT",
+      "title": "Confirm & Register",
+      "terminal": true,
+      "success": true,
+      "data": {
+        "full_name": {
+          "type": "string",
+          "__example__": "John Doe"
+        },
+        "role": {
+          "type": "string",
+          "__example__": "planning"
+        },
+        "affiliation": {
+          "type": "string",
+          "__example__": "independent"
+        },
+        "party": {
+          "type": "string",
+          "__example__": "Independent"
+        },
+        "body_type": {
+          "type": "string",
+          "__example__": "urban"
+        },
+        "position": {
+          "type": "string",
+          "__example__": "Corporation"
+        },
+        "district": {
+          "type": "string",
+          "__example__": "Chennai"
+        },
+        "assembly_name": {
+          "type": "string",
+          "__example__": "10 - Thiruvottiyur"
+        },
+        "summary_text": {
+          "type": "string",
+          "__example__": "Name: John Doe\nDistrict: Chennai"
+        },
+        "booth_numbers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "__example__": [
+            "1",
+            "2"
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "RichText",
+            "text": "${data.summary_text}"
+          },
+          {
+            "type": "Footer",
+            "label": "Submit Registration",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {
+                "full_name": "${data.full_name}",
+                "role": "${data.role}",
+                "affiliation": "${data.affiliation}",
+                "party": "${data.party}",
+                "body_type": "${data.body_type}",
+                "position": "${data.position}",
+                "district": "${data.district}",
+                "assembly_name": "${data.assembly_name}",
+                "booth_numbers": "${data.booth_numbers}"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

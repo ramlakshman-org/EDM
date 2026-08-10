@@ -127,11 +127,6 @@ export default function VoterList() {
   return (
     <div>
       <h1 style={{ marginTop: 0 }}>Voters List</h1>
-      {!canChoose && (
-        <div className="alert warn">
-          Scoped to {f.assemblyId ? <strong>{assemblyName ? `${f.assemblyId} - ${assemblyName}` : `Assembly ${f.assemblyId}`}</strong> : <strong>Your assigned booths</strong>} · {scopeLabel}.
-        </div>
-      )}
       <div className="card">
         <div className="voter-filter-grid">
           {canChoose ? (
