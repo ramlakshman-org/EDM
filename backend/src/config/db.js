@@ -14,7 +14,7 @@ export async function connectDbs() {
   } = process.env;
 
   try {
-    voterClient = new MongoClient(MONGO_VOTER_URL, { serverSelectionTimeoutMS: 5000 });
+    voterClient = new MongoClient(MONGO_VOTER_URL, { serverSelectionTimeoutMS: 5000, maxPoolSize: 10 });
     await voterClient.connect();
     voterDb = voterClient.db(MONGO_VOTER_DB_NAME);
     console.log(`[db] voter_db connected (${MONGO_VOTER_DB_NAME})`);
@@ -24,7 +24,7 @@ export async function connectDbs() {
   }
 
   try {
-    appClient = new MongoClient(MONGO_APP_URL, { serverSelectionTimeoutMS: 5000 });
+    appClient = new MongoClient(MONGO_APP_URL, { serverSelectionTimeoutMS: 5000, maxPoolSize: 10 });
     await appClient.connect();
     appDb = appClient.db(MONGO_APP_DB_NAME);
     console.log(`[db] election_app connected (${MONGO_APP_DB_NAME})`);

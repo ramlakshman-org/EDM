@@ -6,6 +6,21 @@ export const collectionForAc = (acNo) => `ass_${parseInt(acNo, 10)}`;
 
 const INT_FIELDS = ['ID', 'ASSEMBLY_NO', 'PART_NO', 'SECTION_NO', 'AGE'];
 
+// Cache listCollections result — avoids a full DB round-trip on every global
+// EPIC search. 234 collections, refreshed every 10 minutes.
+let _collCache = null;
+let _collCacheTs = 0;
+const COLL_CACHE_TTL = 10 * 60 * 1000;
+
+async function getAssCollections(db) {
+  const now = Date.now();
+  if (_collCache && now - _collCacheTs < COLL_CACHE_TTL) return _collCache;
+  const all = await db.listCollections().toArray();
+  _collCache = all.map((c) => c.name).filter((n) => /^ass_\d+$/.test(n));
+  _collCacheTs = now;
+  return _collCache;
+}
+
 // Build index-friendly filter query:
 function buildQuery({ min_age, max_age, boothId, partNos, gender, has_mobile, search_text }) {
   const q = {};
@@ -260,10 +275,7 @@ export async function getVoterGlobal(id, assemblyId = null) {
     } catch { /* ignore */ }
   }
 
-  const collections = await db.listCollections().toArray();
-  const assColls = collections
-    .map((c) => c.name)
-    .filter((name) => /^ass_\d+$/.test(name));
+  const assColls = await getAssCollections(db);
 
   for (const collName of assColls) {
     try {
@@ -299,10 +311,7 @@ export async function searchEpicGlobal(epicNo, assemblyId = null) {
     return null;
   }
 
-  const collections = await db.listCollections().toArray();
-  const assColls = collections
-    .map((c) => c.name)
-    .filter((name) => /^ass_\d+$/.test(name));
+  const assColls = await getAssCollections(db);
 
   for (const collName of assColls) {
     try {
