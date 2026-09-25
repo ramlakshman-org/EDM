@@ -2588,6 +2588,17 @@ code {
     border-color: #154a28;
     color: #4ade80;
   }
+
+  /* Register form — input fields need a visible boundary in dark mode */
+  :root:not([data-theme="light"]) .reg-field input,
+  :root:not([data-theme="light"]) .reg-field select {
+    background: var(--color-cool-wash);
+    border: 1px solid #2e4466;
+    color: var(--color-primary-ink);
+  }
+  :root:not([data-theme="light"]) .reg-field input::placeholder {
+    color: var(--color-mid-gray);
+  }
 }
 
 /* Same overrides wired to the explicit dark toggle */
@@ -2620,6 +2631,8 @@ code {
 :root[data-theme="dark"] .lang-toggle-switch:hover { border-color: var(--color-electric-blue); background: var(--color-paper); }
 :root[data-theme="dark"] .toggle-thumb { background: #e8edf5; box-shadow: 0 1px 3px rgba(0,0,0,0.6); }
 :root[data-theme="dark"] .sub-amount-badge { background: #0d2418; border-color: #154a28; color: #4ade80; }
+:root[data-theme="dark"] .reg-field input, :root[data-theme="dark"] .reg-field select { background: var(--color-cool-wash); border: 1px solid #2e4466; color: var(--color-primary-ink); }
+:root[data-theme="dark"] .reg-field input::placeholder { color: var(--color-mid-gray); }
 
 /* ===================================================================
    Custom Leaflet Map Layers Control Styling

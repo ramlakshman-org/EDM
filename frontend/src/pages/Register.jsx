@@ -155,6 +155,13 @@ export default function Register() {
 
   const isTa = lang === 'ta';
 
+  // Force light mode on the register page — this is a public voter form,
+  // readability takes priority over system dark mode preference.
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'light');
+    return () => document.documentElement.removeAttribute('data-theme');
+  }, []);
+
   return (
     <div>
       <div className="tricolor-bar" />
@@ -259,7 +266,7 @@ export default function Register() {
             {!done ? (
               <>
                 <div className="progress-head">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--color-mid-gray)', marginBottom: 8 }}>
                     <span>{isTa ? 'படிவப் பூர்த்தி' : 'Form completion'}</span>
                     <span>{pct}%</span>
                   </div>
