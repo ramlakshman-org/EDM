@@ -1,0 +1,32 @@
+User-agent: *
+Allow: /register
+Allow: /faq
+Allow: /terms
+Allow: /privacy
+
+Disallow: /dashboard
+Disallow: /voters
+Disallow: /assemblies
+Disallow: /booths
+Disallow: /booth/
+Disallow: /ward/
+Disallow: /mla-list
+Disallow: /mla-images
+Disallow: /booth-logins
+Disallow: /ward-logins
+Disallow: /registrations
+Disallow: /payments
+Disallow: /team
+Disallow: /flow-images
+Disallow: /assembly-details
+Disallow: /assembly-analytics
+Disallow: /candidate-briefing
+Disallow: /field-operations
+Disallow: /booth-report
+Disallow: /performance-report
+Disallow: /social-media
+Disallow: /crm
+Disallow: /login
+Disallow: /api/
+
+Host: https://www.election2026sir.in

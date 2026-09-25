@@ -324,7 +324,12 @@ export default function Faq() {
 
       {/* FOOTER */}
       <footer style={{ borderTop: '1px solid #303f9f', padding: '24px 6vw', textAlign: 'center', fontSize: 12.5, color: '#94a3b8' }}>
-        © ELECTION DATA MANAGEMENT — POLITICAL CONSULTING &amp; ELECTION CAMPAIGN MANAGEMENT · election2026sir.in
+        © 2026 <strong style={{ color: '#cbd5e1' }}>Election Data Management</strong> — Political Consulting &amp; Election Campaign Management · election2026sir.in
+        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', gap: 20 }}>
+          <Link to="/terms" style={{ color: '#64748b', textDecoration: 'none' }}>Terms &amp; Conditions</Link>
+          <Link to="/privacy" style={{ color: '#64748b', textDecoration: 'none' }}>Privacy Policy</Link>
+          <Link to="/register" style={{ color: '#64748b', textDecoration: 'none' }}>Register</Link>
+        </div>
       </footer>
     </div>
   );

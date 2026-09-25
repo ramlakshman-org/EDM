@@ -668,23 +668,19 @@ export default function AssemblyAnalytics() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {user?.group_id !== 1 && (
-            <button
-              type="button"
-              onClick={() => setBuyModalOpen(true)}
-              style={{
-                background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
-                color: '#ffffff',
-                border: 'none',
-                padding: '9px 16px',
-                borderRadius: 8,
-                fontWeight: 800,
-                fontSize: 13,
-                cursor: 'pointer',
-                boxShadow: '0 3px 10px rgba(22, 163, 74, 0.25)',
-              }}
-            >
-              ⭐ Upgrade PRO Plan
-            </button>
+            user?.paid_status === 'Yes' ? (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%)', color: '#92400e', fontWeight: 700, fontSize: 12.5, padding: '5px 14px', borderRadius: 980, border: '1px solid #fde68a', boxShadow: '0 2px 8px rgba(245,158,11,0.2)' }}>
+                <span style={{ fontSize: 14 }}>👑</span><span>PRO</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setBuyModalOpen(true)}
+                style={{ background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)', color: '#ffffff', border: 'none', padding: '9px 16px', borderRadius: 8, fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: '0 3px 10px rgba(22, 163, 74, 0.25)' }}
+              >
+                ⭐ Upgrade PRO Plan
+              </button>
+            )
           )}
 
           {isAdmin && (

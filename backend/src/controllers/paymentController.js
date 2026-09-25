@@ -572,3 +572,142 @@ export async function checkOrderStatus(req, res) {
     res.status(500).json({ success: false, message: e.message });
   }
 }
+
+// POST /payments/submit-utr — ward user submits UTR after QR payment
+export async function submitUtr(req, res) {
+  try {
+    const { utr, booth_count } = req.body || {};
+    const userId = req.user?.sub;
+
+    if (!utr || String(utr).trim().length < 6) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid UTR / Transaction ID.' });
+    }
+
+    const db = getAppDb();
+
+    // Prevent duplicate UTR submissions
+    const existing = await db.collection('tbl_utr_payments').findOne({ utr: String(utr).trim() });
+    if (existing) {
+      return res.status(400).json({ success: false, message: 'This UTR has already been submitted.' });
+    }
+
+    let userRec = null;
+    if (userId && userId !== 'admin') {
+      try { userRec = await findById(userId); } catch { /* ignore */ }
+    }
+
+    const count = Number(booth_count || (Array.isArray(userRec?.booths) ? userRec.booths.length : 1));
+    const mobile = String(userRec?.mobile_no || req.user?.mobile || req.user?.username || '');
+    const pricing = calculateWardPricing(count, mobile);
+
+    await db.collection('tbl_utr_payments').insertOne({
+      utr: String(utr).trim(),
+      user_id: userId || null,
+      user_name: [userRec?.first_name, userRec?.last_name].filter(Boolean).join(' ') || 'Ward Candidate',
+      mobile_no: mobile,
+      district_id: userRec?.district_id || '',
+      category_name: userRec?.category_name || '',
+      ward_id: userRec?.ward_id || '',
+      candidate_type: userRec?.candidate_type || '',
+      booth_count: pricing.boothCount,
+      amount: pricing.totalAmount,
+      status: 'pending',
+      submitted_at: new Date().toISOString(),
+    });
+
+    res.json({ success: true, message: 'Payment submitted. Admin will verify and activate your account within 24 hours.' });
+  } catch (e) {
+    if (e.message === 'APP_DB_OFFLINE') return res.status(503).json({ success: false, message: 'App database unavailable.' });
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
+// GET /payments/pending-utrs — admin lists pending QR payment submissions
+export async function pendingUtrs(req, res) {
+  try {
+    const db = getAppDb();
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 100);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const statusFilter = req.query.status || 'pending';
+
+    const query = statusFilter === 'all' ? {} : { status: statusFilter };
+    const rows = await db.collection('tbl_utr_payments')
+      .find(query)
+      .sort({ submitted_at: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .toArray();
+
+    const total = await db.collection('tbl_utr_payments').countDocuments(query);
+
+    res.json({ success: true, rows, total, page, limit });
+  } catch (e) {
+    if (e.message === 'APP_DB_OFFLINE') return res.status(503).json({ success: false, message: 'App database unavailable.' });
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
+// POST /payments/approve-utr — admin approves or rejects a QR payment
+export async function approveUtr(req, res) {
+  try {
+    const { utr_id, action } = req.body || {};
+    if (!utr_id || !['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ success: false, message: 'utr_id and action (approve/reject) are required.' });
+    }
+
+    const db = getAppDb();
+    const { ObjectId } = await import('mongodb');
+    const utrDoc = await db.collection('tbl_utr_payments').findOne({ _id: new ObjectId(utr_id) });
+
+    if (!utrDoc) return res.status(404).json({ success: false, message: 'UTR record not found.' });
+    if (utrDoc.status !== 'pending') {
+      return res.status(400).json({ success: false, message: `This UTR is already ${utrDoc.status}.` });
+    }
+
+    if (action === 'reject') {
+      await db.collection('tbl_utr_payments').updateOne(
+        { _id: new ObjectId(utr_id) },
+        { $set: { status: 'rejected', reviewed_at: new Date().toISOString() } }
+      );
+      return res.json({ success: true, message: 'UTR rejected.' });
+    }
+
+    // Approve — mark user as paid and save payment record
+    if (utrDoc.user_id && utrDoc.user_id !== 'admin') {
+      await updateUser(String(utrDoc.user_id), { paid_status: 'Yes', transaction_id: utrDoc.utr });
+    }
+
+    const paymentDoc = {
+      payment_id: utrDoc.utr,
+      order_id: 'QR-PAYMENT',
+      user_id: utrDoc.user_id || null,
+      user_group_id: 6,
+      user_name: utrDoc.user_name || '',
+      mobile_no: utrDoc.mobile_no || '',
+      email: '',
+      district_id: utrDoc.district_id || '',
+      category_name: utrDoc.category_name || '',
+      ward_id: utrDoc.ward_id || '',
+      candidate_type: utrDoc.candidate_type || '',
+      booth_count: utrDoc.booth_count || 1,
+      base_amount: 0,
+      gst_amount: 0,
+      amount: utrDoc.amount || 0,
+      currency: 'INR',
+      status: 'Paid',
+      source: 'qr-utr',
+      created_at: new Date().toISOString(),
+    };
+    await db.collection('tbl_payment').insertOne(paymentDoc);
+
+    await db.collection('tbl_utr_payments').updateOne(
+      { _id: new ObjectId(utr_id) },
+      { $set: { status: 'approved', reviewed_at: new Date().toISOString() } }
+    );
+
+    res.json({ success: true, message: 'Payment approved. User account activated.' });
+  } catch (e) {
+    if (e.message === 'APP_DB_OFFLINE') return res.status(503).json({ success: false, message: 'App database unavailable.' });
+    res.status(500).json({ success: false, message: e.message });
+  }
+}

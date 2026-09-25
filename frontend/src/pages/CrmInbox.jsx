@@ -180,6 +180,13 @@ export default function CrmInbox() {
     return () => clearInterval(t);
   }, []);
 
+  // Track mobile viewport
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   const messagesEndRef = useRef(null);
   const activePhoneRef = useRef(activePhone);
 
@@ -311,6 +318,8 @@ export default function CrmInbox() {
   const [openReactId, setOpenReactId] = useState(null);
   const [clearing, setClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const [activeMobilePanel, setActiveMobilePanel] = useState('list');
 
   // Start replying to a given message (used by the options menu)
   const startReplyFor = (m) => {
@@ -533,21 +542,27 @@ export default function CrmInbox() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh / 0.75)', width: 'calc(100vw / 0.75)', background: '#f8fafc', overflow: 'hidden', zoom: 0.75, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+    <div style={isMobile
+      ? { display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', background: '#f8fafc', overflow: 'hidden', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
+      : { display: 'flex', flexDirection: 'column', height: 'calc(100vh / 0.75)', width: 'calc(100vw / 0.75)', background: '#f8fafc', overflow: 'hidden', zoom: 0.75, fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
+    }>
       
       {/* FULL SCREEN CRM WORKSPACE */}
       <div style={{ display: 'flex', flex: 1, height: '100vh', overflow: 'hidden' }}>
         
         {/* LEFT SIDEBAR: Conversation Threads List */}
-        <div style={{ width: 340, minWidth: 320, background: '#ffffff', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
+        <div style={isMobile
+          ? { width: '100%', background: '#ffffff', display: activeMobilePanel === 'list' ? 'flex' : 'none', flexDirection: 'column' }
+          : { width: 340, minWidth: 320, background: '#ffffff', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }
+        }>
           
           {/* Search & Filter Header */}
           <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid #f1f5f9' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <button
                 type="button"
-                onClick={() => navigate(isAgent ? '/team/dashboard' : '/dashboard')}
-                title="Back to Dashboard"
+                onClick={() => isMobile ? setActiveMobilePanel('list') : navigate(isAgent ? '/team/dashboard' : '/dashboard')}
+                title={isMobile ? 'Back to contacts' : 'Back to Dashboard'}
                 style={{
                   background: '#f1f5f9',
                   color: '#0f172a',
@@ -636,7 +651,7 @@ export default function CrmInbox() {
                 return (
                   <div
                     key={c.clean_mobile || c.phone}
-                    onClick={() => setActivePhone(c.clean_mobile || c.phone)}
+                    onClick={() => { setActivePhone(c.clean_mobile || c.phone); if (isMobile) setActiveMobilePanel('chat'); }}
                     style={{
                       display: 'flex',
                       gap: 12,
@@ -705,7 +720,7 @@ export default function CrmInbox() {
         </div>
 
         {/* CENTER PANE: Active Chat Thread & Reply Input */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
+        <div style={{ flex: 1, display: isMobile && activeMobilePanel === 'list' ? 'none' : 'flex', flexDirection: 'column', background: '#f8fafc' }}>
           {contact ? (
             <>
               {/* Top Chat Contact Header (Light Theme) */}
@@ -1124,7 +1139,7 @@ export default function CrmInbox() {
         </div>
 
         {/* RIGHT DRAWER: WhatsApp Templates Panel */}
-        {showTemplates && (
+        {showTemplates && !isMobile && (
           <div style={{ width: 340, background: '#ffffff', borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
             <div style={{ padding: '16px 18px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -1247,7 +1262,7 @@ export default function CrmInbox() {
         )}
 
         {/* RIGHT DRAWER: Candidate Profile Dossier */}
-        {contact && !showTemplates && (
+        {contact && !showTemplates && !isMobile && (
           <div style={{ width: 350, background: '#f8fafc', borderLeft: '1px solid #e2e8f0', padding: 0, overflowY: 'auto' }}>
             {/* Profile hero */}
             <div style={{ background: 'linear-gradient(135deg, #0071e3 0%, #4f46e5 100%)', padding: '20px 18px 18px', color: '#fff' }}>

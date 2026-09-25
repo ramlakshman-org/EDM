@@ -6,8 +6,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://localhost:5000', changeOrigin: true },
-      '/report-files': { target: 'http://localhost:5000', changeOrigin: true },
+      '/api': { target: 'https://www.election2026sir.in', changeOrigin: true },
+      '/report-files': { target: 'https://www.election2026sir.in', changeOrigin: true },
     },
   },
   build: {

@@ -837,7 +837,7 @@ button.danger:hover {
 
 @media (max-width: 900px) {
   .reg-split {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -872,7 +872,7 @@ button.danger:hover {
   color: var(--color-cool-wash);
   font-size: 17px;
   line-height: 1.6;
-  max-width: 480px;
+  max-width: min(480px, 100%);
   margin-bottom: 40px;
 }
 
@@ -1562,11 +1562,27 @@ code {
   .epic-result .epic-col:first-child { border-right: none; padding-right: 0; }
 }
 
+/* Register page — mobile hero fixes */
+@media (max-width: 640px) {
+  .reg-hero {
+    padding: 40px 24px;
+  }
+  .reg-hero h1 {
+    font-size: 28px;
+    letter-spacing: -0.5px;
+  }
+  .reg-stats {
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+}
+
 /* Small phones */
 @media (max-width: 480px) {
   .content { padding: 14px 10px; }
   .card { padding: 14px; }
   h1 { font-size: 22px; }
+  .reg-hero h1 { font-size: 24px; }
   .topbar strong { font-size: 12px; }
   button, .gov-btn, .reg-submit { padding: 0 16px; font-size: 14px; }
 }
@@ -2359,6 +2375,253 @@ code {
 }
 
 /* ===================================================================
+   Dark Mode — token overrides only; components inherit via var()
+   Guard: system default (no stamp) + explicit dark toggle win;
+          explicit light toggle loses.
+   =================================================================== */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-canvas: #0f1623;
+    --color-paper: #1a2236;
+    --color-primary-ink: #e8edf5;
+    --gradient-primary-ink: linear-gradient(184deg, #1a2236 20%, #1a4ab0 76%, #0f1623 95%);
+    --color-mid-gray: #8b9ab4;
+    --color-deep-gray: #a8b6cc;
+    --color-hairline: #283449;
+    --color-cool-wash: #1e2d44;
+    --color-faded-surface: #121926;
+    --color-quiet-dot: #5e7090;
+    --color-electric-blue: #4b9eff;
+    --color-link-blue: #5ba8ff;
+    --color-ember: #ff7043;
+
+    /* Tile pastel swatches — darkened equivalents */
+    --color-sky: #152a38;
+    --color-citrus: #252a14;
+    --color-starlight: #2c2016;
+    --color-silver: #21252a;
+    --color-blush: #2c1616;
+    --color-indigo: #1c2840;
+    --color-midnight: #141c2e;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-canvas: #0f1623;
+  --color-paper: #1a2236;
+  --color-primary-ink: #e8edf5;
+  --gradient-primary-ink: linear-gradient(184deg, #1a2236 20%, #1a4ab0 76%, #0f1623 95%);
+  --color-mid-gray: #8b9ab4;
+  --color-deep-gray: #a8b6cc;
+  --color-hairline: #283449;
+  --color-cool-wash: #1e2d44;
+  --color-faded-surface: #121926;
+  --color-quiet-dot: #5e7090;
+  --color-electric-blue: #4b9eff;
+  --color-link-blue: #5ba8ff;
+  --color-ember: #ff7043;
+  --color-sky: #152a38;
+  --color-citrus: #252a14;
+  --color-starlight: #2c2016;
+  --color-silver: #21252a;
+  --color-blush: #2c1616;
+  --color-indigo: #1c2840;
+  --color-midnight: #141c2e;
+}
+
+/* Hardcoded-white overrides that tokens alone can't reach */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body { background: var(--color-canvas); }
+
+  :root:not([data-theme="light"]) .topbar {
+    background: rgba(26, 34, 54, 0.88);
+  }
+
+  :root:not([data-theme="light"]) .reg-header-bar {
+    background: var(--color-paper);
+    border-color: var(--color-hairline);
+  }
+
+  :root:not([data-theme="light"]) .spinner-overlay {
+    background: rgba(15, 22, 35, 0.72);
+  }
+
+  :root:not([data-theme="light"]) .pager-btn,
+  :root:not([data-theme="light"]) .pager-arrow {
+    background: var(--color-paper) !important;
+    border-color: var(--color-hairline) !important;
+    color: var(--color-primary-ink) !important;
+  }
+
+  :root:not([data-theme="light"]) .pager-btn:hover:not(:disabled),
+  :root:not([data-theme="light"]) .pager-arrow:hover:not(:disabled) {
+    background: var(--color-cool-wash) !important;
+    border-color: var(--color-electric-blue) !important;
+    color: var(--color-electric-blue) !important;
+  }
+
+  :root:not([data-theme="light"]) .pager-btn:disabled,
+  :root:not([data-theme="light"]) .pager-arrow:disabled {
+    background: var(--color-canvas) !important;
+    border-color: var(--color-hairline) !important;
+    color: var(--color-quiet-dot) !important;
+  }
+
+  :root:not([data-theme="light"]) .voter-act-btn {
+    background: var(--color-paper);
+    border-color: var(--color-hairline);
+    color: var(--color-primary-ink);
+  }
+
+  :root:not([data-theme="light"]) .voter-act-btn.call,
+  :root:not([data-theme="light"]) .voter-act-btn.sms {
+    background: #0f2540;
+    border-color: #1a4068;
+    color: var(--color-electric-blue);
+  }
+
+  :root:not([data-theme="light"]) .voter-act-btn.wa {
+    background: #0d2418;
+    border-color: #154a28;
+    color: #4ade80;
+  }
+
+  :root:not([data-theme="light"]) .voter-act-btn.view {
+    background: var(--color-electric-blue);
+    color: #ffffff;
+    border: none;
+  }
+
+  :root:not([data-theme="light"]) .reg-icon-btn {
+    background: var(--color-paper);
+    border-color: var(--color-hairline);
+  }
+
+  :root:not([data-theme="light"]) .reg-icon-btn.call {
+    background: #0f2540;
+    border-color: #1a4068;
+  }
+
+  :root:not([data-theme="light"]) .reg-icon-btn.wa {
+    background: #0d2418;
+    border-color: #154a28;
+  }
+
+  :root:not([data-theme="light"]) .reg-icon-btn.view {
+    background: #0f2540;
+    border-color: #1a4068;
+  }
+
+  :root:not([data-theme="light"]) .leaflet-custom-layer-control,
+  :root:not([data-theme="light"]) .layer-btn-trigger,
+  :root:not([data-theme="light"]) .layer-cards-panel {
+    background: var(--color-paper);
+    border-color: var(--color-hairline);
+  }
+
+  :root:not([data-theme="light"]) .layer-btn-trigger:hover {
+    background: var(--color-cool-wash);
+  }
+
+  :root:not([data-theme="light"]) .mobile-dropdown-menu {
+    background: var(--color-paper);
+    border-color: var(--color-hairline);
+  }
+
+  :root:not([data-theme="light"]) .voter-tag {
+    background: var(--color-cool-wash);
+    border-color: var(--color-hairline);
+    color: var(--color-primary-ink);
+  }
+
+  :root:not([data-theme="light"]) .voter-tag.mob {
+    background: #0f2a40;
+    color: #7dd3fc;
+    border-color: #1a4a68;
+  }
+
+  :root:not([data-theme="light"]) .voter-tag.no-mob {
+    background: #2a0f0f;
+    color: #fca5a5;
+    border-color: #4a1a1a;
+  }
+
+  :root:not([data-theme="light"]) .assembly-no-badge {
+    background: #152030;
+    color: var(--color-electric-blue);
+  }
+
+  :root:not([data-theme="light"]) .voter-epic-badge {
+    background: #152030;
+    color: var(--color-electric-blue);
+  }
+
+  :root:not([data-theme="light"]) .mla-photo,
+  :root:not([data-theme="light"]) .party-flag {
+    background: var(--color-paper);
+    border-color: var(--color-hairline);
+  }
+
+  :root:not([data-theme="light"]) .nav-faq-btn {
+    background: var(--color-paper);
+    border-color: var(--color-hairline);
+    color: var(--color-electric-blue);
+  }
+
+  :root:not([data-theme="light"]) .lang-toggle-switch {
+    background: var(--color-cool-wash);
+    border-color: var(--color-hairline);
+  }
+
+  :root:not([data-theme="light"]) .lang-toggle-switch:hover {
+    border-color: var(--color-electric-blue);
+    background: var(--color-paper);
+  }
+
+  :root:not([data-theme="light"]) .toggle-thumb {
+    background: #e8edf5;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  }
+
+  :root:not([data-theme="light"]) .sub-amount-badge {
+    background: #0d2418;
+    border-color: #154a28;
+    color: #4ade80;
+  }
+}
+
+/* Same overrides wired to the explicit dark toggle */
+:root[data-theme="dark"] body { background: var(--color-canvas); }
+:root[data-theme="dark"] .topbar { background: rgba(26, 34, 54, 0.88); }
+:root[data-theme="dark"] .reg-header-bar { background: var(--color-paper); border-color: var(--color-hairline); }
+:root[data-theme="dark"] .spinner-overlay { background: rgba(15, 22, 35, 0.72); }
+:root[data-theme="dark"] .pager-btn, :root[data-theme="dark"] .pager-arrow { background: var(--color-paper) !important; border-color: var(--color-hairline) !important; color: var(--color-primary-ink) !important; }
+:root[data-theme="dark"] .pager-btn:hover:not(:disabled), :root[data-theme="dark"] .pager-arrow:hover:not(:disabled) { background: var(--color-cool-wash) !important; border-color: var(--color-electric-blue) !important; color: var(--color-electric-blue) !important; }
+:root[data-theme="dark"] .pager-btn:disabled, :root[data-theme="dark"] .pager-arrow:disabled { background: var(--color-canvas) !important; border-color: var(--color-hairline) !important; color: var(--color-quiet-dot) !important; }
+:root[data-theme="dark"] .voter-act-btn { background: var(--color-paper); border-color: var(--color-hairline); color: var(--color-primary-ink); }
+:root[data-theme="dark"] .voter-act-btn.call, :root[data-theme="dark"] .voter-act-btn.sms { background: #0f2540; border-color: #1a4068; color: var(--color-electric-blue); }
+:root[data-theme="dark"] .voter-act-btn.wa { background: #0d2418; border-color: #154a28; color: #4ade80; }
+:root[data-theme="dark"] .voter-act-btn.view { background: var(--color-electric-blue); color: #ffffff; border: none; }
+:root[data-theme="dark"] .reg-icon-btn { background: var(--color-paper); border-color: var(--color-hairline); }
+:root[data-theme="dark"] .reg-icon-btn.call { background: #0f2540; border-color: #1a4068; }
+:root[data-theme="dark"] .reg-icon-btn.wa { background: #0d2418; border-color: #154a28; }
+:root[data-theme="dark"] .reg-icon-btn.view { background: #0f2540; border-color: #1a4068; }
+:root[data-theme="dark"] .leaflet-custom-layer-control, :root[data-theme="dark"] .layer-btn-trigger, :root[data-theme="dark"] .layer-cards-panel { background: var(--color-paper); border-color: var(--color-hairline); }
+:root[data-theme="dark"] .layer-btn-trigger:hover { background: var(--color-cool-wash); }
+:root[data-theme="dark"] .mobile-dropdown-menu { background: var(--color-paper); border-color: var(--color-hairline); }
+:root[data-theme="dark"] .voter-tag { background: var(--color-cool-wash); border-color: var(--color-hairline); color: var(--color-primary-ink); }
+:root[data-theme="dark"] .voter-tag.mob { background: #0f2a40; color: #7dd3fc; border-color: #1a4a68; }
+:root[data-theme="dark"] .voter-tag.no-mob { background: #2a0f0f; color: #fca5a5; border-color: #4a1a1a; }
+:root[data-theme="dark"] .assembly-no-badge { background: #152030; color: var(--color-electric-blue); }
+:root[data-theme="dark"] .voter-epic-badge { background: #152030; color: var(--color-electric-blue); }
+:root[data-theme="dark"] .mla-photo, :root[data-theme="dark"] .party-flag { background: var(--color-paper); border-color: var(--color-hairline); }
+:root[data-theme="dark"] .nav-faq-btn { background: var(--color-paper); border-color: var(--color-hairline); color: var(--color-electric-blue); }
+:root[data-theme="dark"] .lang-toggle-switch { background: var(--color-cool-wash); border-color: var(--color-hairline); }
+:root[data-theme="dark"] .lang-toggle-switch:hover { border-color: var(--color-electric-blue); background: var(--color-paper); }
+:root[data-theme="dark"] .toggle-thumb { background: #e8edf5; box-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+:root[data-theme="dark"] .sub-amount-badge { background: #0d2418; border-color: #154a28; color: #4ade80; }
+
+/* ===================================================================
    Custom Leaflet Map Layers Control Styling
    =================================================================== */
 .leaflet-custom-layer-control {
@@ -2614,6 +2877,63 @@ code {
     color: var(--color-primary-ink);
     line-height: 1;
   }
+}
+
+/* Register Page Footer */
+.reg-site-footer {
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  padding: 20px 24px;
+  text-align: center;
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.reg-footer-copy {
+  margin-bottom: 6px;
+}
+
+.reg-footer-copy strong {
+  color: #374151;
+}
+
+.reg-footer-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.reg-footer-links a {
+  color: #64748b;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.reg-footer-links a:hover {
+  color: #1a237e;
+  text-decoration: underline;
+}
+
+.reg-footer-sep {
+  color: #cbd5e1;
+}
+
+/* HtmlReport full-bleed wrapper — matches .content padding at each breakpoint */
+.html-report-wrapper {
+  margin: -28px -32px;
+  width: calc(100% + 64px);
+}
+@media (max-width: 1100px) {
+  .html-report-wrapper { margin: -28px -24px; width: calc(100% + 48px); }
+}
+@media (max-width: 860px) {
+  .html-report-wrapper { margin: -18px -14px; width: calc(100% + 28px); }
+}
+@media (max-width: 480px) {
+  .html-report-wrapper { margin: -14px -10px; width: calc(100% + 20px); }
 }
 
 

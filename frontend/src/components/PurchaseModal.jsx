@@ -49,6 +49,9 @@ export default function PurchaseModal({ open, onClose, onSuccess, user, accountI
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [successData, setSuccessData] = useState(null);
+  const [payMethod] = useState('qr');
+  const [utr, setUtr] = useState('');
+  const [utrSubmitted, setUtrSubmitted] = useState(false);
 
   const count = Math.max(1, Number(boothCount || 1));
   const name = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.name || accountInfo?.ward_login || 'Candidate';
@@ -82,8 +85,31 @@ export default function PurchaseModal({ open, onClose, onSuccess, user, accountI
     if (open) {
       setErr('');
       setSuccessData(null);
+      setUtr('');
+      setUtrSubmitted(false);
     }
   }, [open]);
+
+  const handleUtrSubmit = async () => {
+    if (!utr.trim() || utr.trim().length < 6) {
+      setErr('Please enter a valid UTR / Transaction ID (minimum 6 characters).');
+      return;
+    }
+    setErr('');
+    setLoading(true);
+    try {
+      const res = await api.post('/payments/submit-utr', { utr: utr.trim(), booth_count: count });
+      if (res.data.success) {
+        setUtrSubmitted(true);
+      } else {
+        setErr(res.data.message || 'Submission failed. Please try again.');
+      }
+    } catch (e) {
+      setErr(e.response?.data?.message || 'Error submitting UTR. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!open) return null;
 
@@ -420,58 +446,137 @@ export default function PurchaseModal({ open, onClose, onSuccess, user, accountI
                     </div>
                   </div>
 
-                  {/* Action Buttons */}
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      disabled={loading}
-                      style={{ flex: 1, padding: 12, borderRadius: 980, fontWeight: 600, background: '#f5f5f7', color: '#1d1d1f', border: '1px solid rgba(0, 0, 0, 0.08)', cursor: 'pointer' }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handlePay}
-                      disabled={loading}
-                      style={{
-                        flex: 2,
-                        padding: 12,
-                        borderRadius: 980,
-                        fontWeight: 600,
-                        fontSize: 14.5,
-                        background: 'linear-gradient(180deg, #0077ed 0%, #0066cc 100%)',
-                        color: '#ffffff',
-                        border: 'none',
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 8,
-                        boxShadow: '0 2px 8px rgba(0, 119, 237, 0.35)',
-                        opacity: loading ? 0.85 : 1,
-                      }}
-                    >
-                      {loading ? (
-                        <>
-                          <span
-                            style={{
-                              width: 16,
-                              height: 16,
-                              border: '2px solid rgba(255, 255, 255, 0.35)',
-                              borderTopColor: '#ffffff',
-                              borderRadius: '50%',
-                              display: 'inline-block',
-                              animation: 'appleSpinnerRot 0.6s linear infinite',
-                            }}
+                  {/* Action Section — Razorpay or QR */}
+                  {payMethod === 'razorpay' ? (
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={loading}
+                        style={{ flex: 1, padding: 12, borderRadius: 980, fontWeight: 600, background: '#f5f5f7', color: '#1d1d1f', border: '1px solid rgba(0, 0, 0, 0.08)', cursor: 'pointer' }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handlePay}
+                        disabled={loading}
+                        style={{
+                          flex: 2, padding: 12, borderRadius: 980, fontWeight: 600, fontSize: 14.5,
+                          background: 'linear-gradient(180deg, #0077ed 0%, #0066cc 100%)',
+                          color: '#ffffff', border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                          boxShadow: '0 2px 8px rgba(0, 119, 237, 0.35)', opacity: loading ? 0.85 : 1,
+                        }}
+                      >
+                        {loading ? (
+                          <>
+                            <span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.35)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'appleSpinnerRot 0.6s linear infinite' }} />
+                            <span>Processing...</span>
+                          </>
+                        ) : (
+                          <>💳 Pay ₹{fmt(pricing.total)} via Razorpay</>
+                        )}
+                      </button>
+                    </div>
+                  ) : (
+                    /* QR Payment Section */
+                    utrSubmitted ? (
+                      <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                        <div style={{ width: 56, height: 56, background: '#dcfce7', color: '#15803d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, margin: '0 auto 14px' }}>✓</div>
+                        <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: '#1d1d1f' }}>UTR Submitted!</h3>
+                        <p style={{ margin: '0 0 20px', fontSize: 13.5, color: '#424245', lineHeight: 1.55 }}>
+                          Your payment is under review. Admin will verify and activate your account within <strong>24 hours</strong>.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={onClose}
+                          style={{ width: '100%', padding: '12px 20px', borderRadius: 980, fontSize: 15, fontWeight: 600, background: '#f5f5f7', color: '#1d1d1f', border: '1px solid rgba(0,0,0,0.08)', cursor: 'pointer' }}
+                        >
+                          Close
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        {/* QR Image */}
+                        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                          <p style={{ margin: '0 0 10px', fontSize: 13, color: '#424245', fontWeight: 600 }}>
+                            Scan & pay <strong style={{ color: '#0071e3' }}>₹{fmt(pricing.total)}</strong> to:
+                          </p>
+                          <div style={{ display: 'inline-block', background: '#fff', border: '1px solid #e5e5e7', borderRadius: 16, padding: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+                            <img
+                              src="/payment-qr.jpeg"
+                              alt="UPI QR Code"
+                              style={{ width: 200, height: 200, display: 'block', objectFit: 'contain' }}
+                              onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                            />
+                            <div style={{ display: 'none', width: 200, height: 200, alignItems: 'center', justifyContent: 'center', background: '#f5f5f7', borderRadius: 8, fontSize: 13, color: '#6e6e73', textAlign: 'center', padding: 16 }}>
+                              QR image not found.<br />Place payment-qr.jpeg in /public folder.
+                            </div>
+                          </div>
+                          <p style={{ margin: '10px 0 0', fontSize: 12, color: '#6e6e73' }}>
+                            senthilkumar nagendren · Google Pay / Any UPI
+                          </p>
+                        </div>
+
+                        {/* UTR Input */}
+                        <div style={{ marginBottom: 14 }}>
+                          <label style={{ fontSize: 12, fontWeight: 700, color: '#1d1d1f', marginBottom: 6, display: 'block' }}>
+                            Enter UTR / Transaction ID after payment
+                          </label>
+                          <input
+                            type="text"
+                            value={utr}
+                            onChange={(e) => setUtr(e.target.value)}
+                            placeholder="e.g. 123456789012"
+                            style={{ border: '1.5px solid #0071e3', borderRadius: 10, padding: '10px 12px', width: '100%', fontSize: 14, fontFamily: 'monospace', letterSpacing: '0.5px', outline: 'none', boxSizing: 'border-box' }}
                           />
-                          <span>Processing...</span>
-                        </>
-                      ) : (
-                        <>💳 Pay ₹{fmt(pricing.total)} via Razorpay</>
-                      )}
-                    </button>
-                  </div>
+                          <p style={{ margin: '5px 0 0', fontSize: 11.5, color: '#86868b' }}>
+                            Find this in your UPI app under payment history.
+                          </p>
+                        </div>
+
+                        {/* Inline error for UTR submission */}
+                        {err && (
+                          <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#b91c1c', fontWeight: 600 }}>
+                            {err}
+                          </div>
+                        )}
+
+                        {/* Buttons */}
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          <button
+                            type="button"
+                            onClick={onClose}
+                            disabled={loading}
+                            style={{ flex: 1, padding: 12, borderRadius: 980, fontWeight: 600, background: '#f5f5f7', color: '#1d1d1f', border: '1px solid rgba(0,0,0,0.08)', cursor: 'pointer' }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleUtrSubmit}
+                            disabled={loading || !utr.trim()}
+                            style={{
+                              flex: 2, padding: 12, borderRadius: 980, fontWeight: 600, fontSize: 14.5,
+                              background: loading || !utr.trim() ? '#86868b' : 'linear-gradient(180deg, #16a34a 0%, #15803d 100%)',
+                              color: '#fff', border: 'none', cursor: loading || !utr.trim() ? 'not-allowed' : 'pointer',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                            }}
+                          >
+                            {loading ? (
+                              <>
+                                <span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.35)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'appleSpinnerRot 0.6s linear infinite' }} />
+                                <span>Submitting...</span>
+                              </>
+                            ) : (
+                              <>✅ I&apos;ve Paid — Submit UTR</>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  )}
                 </div>
               )}
             </div>

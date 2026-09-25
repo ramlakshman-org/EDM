@@ -29,6 +29,8 @@ import Subscriptions from './pages/Subscriptions.jsx';
 import FlowImages from './pages/FlowImages.jsx';
 import CrmInbox from './pages/CrmInbox.jsx';
 import Faq from './pages/Faq.jsx';
+import TermsAndConditions from './pages/TermsAndConditions.jsx';
+import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
 import TeamManagement from './pages/TeamManagement.jsx';
 import TeamDashboard from './pages/TeamDashboard.jsx';
 import TeamReports from './pages/TeamReports.jsx';
@@ -88,6 +90,8 @@ export default function App() {
       <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
       <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
       <Route path="/faq" element={<Faq />} />
+      <Route path="/terms" element={<TermsAndConditions />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/crm" element={<RequireRole allowedGroups={[1, 12]}><CrmInbox /></RequireRole>} />
       <Route
         path="/"

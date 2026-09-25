@@ -34,9 +34,7 @@ export default function HtmlReport({ docKey, title }) {
   }, [docKey]);
 
   return (
-    <div style={{
-      margin: '-28px -32px',
-      width: 'calc(100% + 64px)',
+    <div className="html-report-wrapper" style={{
       height: 'calc(100vh - 48px)',
       display: 'flex',
       flexDirection: 'column',
@@ -44,9 +42,9 @@ export default function HtmlReport({ docKey, title }) {
       overflow: 'hidden'
     }}>
       {isAdmin && (
-        <div style={{ padding: '8px 16px', background: '#f5f5f7', borderBottom: '1px solid #e3e7ef', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <label style={{ margin: 0, fontWeight: 600, fontSize: 13 }}>Select Assembly:</label>
-          <select value={assemblyId} onChange={(e) => { setAssemblyId(e.target.value); load(e.target.value); }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #ccc', background: '#fff' }}>
+        <div style={{ padding: '8px 16px', background: '#f5f5f7', borderBottom: '1px solid #e3e7ef', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <label style={{ margin: 0, fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap' }}>Select Assembly:</label>
+          <select value={assemblyId} onChange={(e) => { setAssemblyId(e.target.value); load(e.target.value); }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #ccc', background: '#fff', flex: 1, minWidth: 180 }}>
             <option value="">Select Assembly</option>
             {assemblies.map((a) => <option key={a.assembly_no} value={a.assembly_no}>{a.assembly_no} - {a.assembly_name}</option>)}
           </select>

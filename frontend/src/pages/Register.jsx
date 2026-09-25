@@ -210,6 +210,12 @@ export default function Register() {
             <Link to="/faq" className="mobile-menu-item" onClick={() => setMenuOpen(false)}>
               <span style={{ fontSize: 16 }}>❓</span> {isTa ? 'கேள்வி-பதில் (FAQ)' : 'FAQ'}
             </Link>
+            <Link to="/terms" className="mobile-menu-item" onClick={() => setMenuOpen(false)}>
+              <span style={{ fontSize: 16 }}>📄</span> {isTa ? 'விதிமுறைகள்' : 'Terms & Conditions'}
+            </Link>
+            <Link to="/privacy" className="mobile-menu-item" onClick={() => setMenuOpen(false)}>
+              <span style={{ fontSize: 16 }}>🔒</span> {isTa ? 'தனியுரிமைக் கொள்கை' : 'Privacy Policy'}
+            </Link>
             <Link to="/login" className="mobile-menu-item" onClick={() => setMenuOpen(false)}>
               <span style={{ fontSize: 16 }}>🔑</span> {isTa ? 'உள்நுழைக (Login)' : 'Login →'}
             </Link>
@@ -594,6 +600,20 @@ export default function Register() {
           </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="reg-site-footer">
+        <div className="reg-footer-copy">
+          © 2026 <strong>Election Data Management</strong> — Political Consulting &amp; Election Campaign Management · election2026sir.in
+        </div>
+        <div className="reg-footer-links">
+          <Link to="/terms">{isTa ? 'விதிமுறைகள்' : 'Terms & Conditions'}</Link>
+          <span className="reg-footer-sep">·</span>
+          <Link to="/privacy">{isTa ? 'தனியுரிமைக் கொள்கை' : 'Privacy Policy'}</Link>
+          <span className="reg-footer-sep">·</span>
+          <Link to="/faq">FAQ</Link>
+        </div>
+      </footer>
     </div>
   );
 }

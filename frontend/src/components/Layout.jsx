@@ -16,6 +16,15 @@ export default function Layout() {
 
   useEffect(() => {
     const fetchWardStatus = () => {
+      api.get('/payments/check-paid')
+        .then(({ data }) => {
+          if (data.success && data.paid) {
+            setIsPaidState(true);
+            if (updateUserData) updateUserData({ paid_status: 'Yes' });
+          }
+        })
+        .catch(() => {});
+
       if (!isWardUser) return;
       api.get('/ward/home')
         .then(({ data }) => {
@@ -25,15 +34,6 @@ export default function Layout() {
               setIsPaidState(true);
               if (updateUserData) updateUserData({ paid_status: 'Yes' });
             }
-          }
-        })
-        .catch(() => {});
-
-      api.get('/payments/check-paid')
-        .then(({ data }) => {
-          if (data.success && data.paid) {
-            setIsPaidState(true);
-            if (updateUserData) updateUserData({ paid_status: 'Yes' });
           }
         })
         .catch(() => {});
