@@ -73,7 +73,7 @@ export async function sendWatiCredentials({ mobile, name, username, passcode }) 
   // edms_login_v1 has three body variables (labels baked into the values so the
   // static text stays generic and Meta-approved):
   //   detail_one = login link, detail_two = name/user id, detail_three = password.
-  const loginLink = process.env.WATI_LOGIN_LINK || 'https://election2026sir.in/login';
+  const loginLink = process.env.WATI_LOGIN_LINK || 'https://tnedms.com/login';
   const parameters = [
     { name: 'detail_one', value: `Login: ${loginLink}` },
     { name: 'detail_two', value: `User ID: ${String(username || '')}` },
