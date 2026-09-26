@@ -187,7 +187,7 @@ export async function getConversationHistory(req, res) {
       }
     }
 
-    const DEFAULT_HEADER = 'https://election2026sir.in/EDM.png';
+    const DEFAULT_HEADER = 'https://tnedms.com/EDM.png';
 
     const enrichedMessages = messages.map((m) => {
       const meta = m.metadata || {};
@@ -377,8 +377,8 @@ export async function sendCredentials(req, res) {
         // edms_welcome has an IMAGE header + one body var ({{1}} = name) — both
         // must be supplied at send time or Meta rejects with (#132000).
         const credAsset = (await db.collection('app_flow_images').findOne({ key: 'welcome_back_header' })) || (await db.collection('app_flow_images').findOne({ key: 'register_success_header' }));
-        let credHeaderUrl = credAsset?.url ? String(credAsset.url).replace(/^http:\/\//, 'https://') : 'https://election2026sir.in/EDM.png';
-        if (credAsset?.type === 'video' || /\.mp4($|\?)/i.test(credHeaderUrl)) credHeaderUrl = 'https://election2026sir.in/EDM.png';
+        let credHeaderUrl = credAsset?.url ? String(credAsset.url).replace(/^http:\/\//, 'https://') : 'https://tnedms.com/EDM.png';
+        if (credAsset?.type === 'video' || /\.mp4($|\?)/i.test(credHeaderUrl)) credHeaderUrl = 'https://tnedms.com/EDM.png';
         // Window closed: send the approved 'edms_welcome' template (image header +
         // Login button). WhatsApp does not allow the passcode inside a template,
         // so it's a login nudge; the passcode is delivered inside the window.
@@ -395,7 +395,7 @@ export async function sendCredentials(req, res) {
           body: `Welcome back ${name}! 👋\n\nYou are registered on EDMS. Tap the button below to log in to your Election Management Dashboard.`,
           waMessageId: tplResult?.messages?.[0]?.id,
           contactName: name,
-          metadata: { action: 'sent_credentials', username: cleanMobile, passcode, headerUrl: credHeaderUrl, headerType: 'image', btnText: 'Login Now', btnUrl: 'https://election2026sir.in/login' },
+          metadata: { action: 'sent_credentials', username: cleanMobile, passcode, headerUrl: credHeaderUrl, headerType: 'image', btnText: 'Login Now', btnUrl: 'https://tnedms.com/login' },
         });
         return res.json({ success: true, message: `Login nudge sent to ${name} via approved template (window closed). The passcode isn't allowed inside templates by WhatsApp — it's shared inside the messaging window.`, result: tplResult });
       } catch (e) {
@@ -422,7 +422,7 @@ export async function sendCredentials(req, res) {
       bodyText,
       headerText: 'Login Credentials',
       btnText: 'Login Now',
-      btnUrl: 'https://election2026sir.in/login',
+      btnUrl: 'https://tnedms.com/login',
       headerUrl,
       headerType: headerUrl ? headerType : 'text',
     });
@@ -472,8 +472,8 @@ export async function sendFlow(req, res) {
     if (!flowWin.window_active) {
       try {
         const regHdrAsset = await db.collection('app_flow_images').findOne({ key: 'register_header' });
-        let regHeaderUrl = regHdrAsset?.url ? String(regHdrAsset.url).replace(/^http:\/\//, 'https://') : 'https://election2026sir.in/EDM.png';
-        if (regHdrAsset?.type === 'video' || /\.mp4($|\?)/i.test(regHeaderUrl)) regHeaderUrl = 'https://election2026sir.in/EDM.png';
+        let regHeaderUrl = regHdrAsset?.url ? String(regHdrAsset.url).replace(/^http:\/\//, 'https://') : 'https://tnedms.com/EDM.png';
+        if (regHdrAsset?.type === 'video' || /\.mp4($|\?)/i.test(regHeaderUrl)) regHeaderUrl = 'https://tnedms.com/EDM.png';
 
         // The registration template's CTA is a WhatsApp Flow button — tapping it
         // opens the in-WhatsApp registration form.

@@ -874,9 +874,9 @@ export default function CrmInbox() {
 
                     let btn = null;
                     if (meta.action === 'sent_registration_flow' || meta.flowCta) {
-                      btn = { label: `🗳️ ${meta.flowCta || 'Register Now'}`, href: 'https://election2026sir.in/register' };
+                      btn = { label: `🗳️ ${meta.flowCta || 'Register Now'}`, href: 'https://tnedms.com/register' };
                     } else if (meta.action === 'sent_credentials' || meta.action === 'manual_crm_sent_credentials' || meta.btnUrl) {
-                      btn = { label: `🔗 ${meta.btnText || 'Login Now'}`, href: meta.btnUrl || 'https://election2026sir.in/login' };
+                      btn = { label: `🔗 ${meta.btnText || 'Login Now'}`, href: meta.btnUrl || 'https://tnedms.com/login' };
                     }
 
                     const quote = meta.reply_preview;

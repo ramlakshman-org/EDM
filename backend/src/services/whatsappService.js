@@ -161,7 +161,7 @@ export async function sendUrlButtonMessage(to, options = {}) {
   const headerType = options.headerType || 'text';
   const headerText = options.headerText || 'Login Credentials';
   const btnText = options.btnText || 'Login Now';
-  const btnUrl = options.btnUrl || 'https://election2026sir.in/login';
+  const btnUrl = options.btnUrl || 'https://tnedms.com/login';
 
   let header = { type: 'text', text: headerText.slice(0, 60) };
   if (headerType === 'image' && headerUrl) {

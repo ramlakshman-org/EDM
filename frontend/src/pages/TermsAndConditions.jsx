@@ -30,7 +30,7 @@ export default function TermsAndConditions() {
 
         <div style={{ background: '#0E2340', border: '1px solid #1e3a5f', borderRadius: 12, padding: '32px 36px', lineHeight: 1.8, fontSize: 15 }}>
           <p style={{ marginTop: 0 }}>
-            Welcome to <strong style={{ color: '#ffffff' }}>election2026sir.in</strong>. By accessing or using this website, you agree to the following Terms &amp; Conditions.
+            Welcome to <strong style={{ color: '#ffffff' }}>tnedms.com</strong>. By accessing or using this website, you agree to the following Terms &amp; Conditions.
           </p>
 
           {[
@@ -89,7 +89,7 @@ export default function TermsAndConditions() {
       {/* Footer */}
       <footer style={{ borderTop: '1px solid #303f9f', padding: '24px 6vw', textAlign: 'center', fontSize: 12.5, color: '#64748b' }}>
         © 2026 <strong style={{ color: '#94a3b8' }}>Election Data Management</strong> — Political Consulting &amp; Election Campaign Management ·{' '}
-        <span style={{ color: '#475569' }}>election2026sir.in</span>
+        <span style={{ color: '#475569' }}>tnedms.com</span>
         <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', gap: 16 }}>
           <Link to="/terms" style={{ color: '#64748b', textDecoration: 'none' }}>Terms &amp; Conditions</Link>
           <Link to="/privacy" style={{ color: '#64748b', textDecoration: 'none' }}>Privacy Policy</Link>

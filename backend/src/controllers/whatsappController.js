@@ -549,7 +549,7 @@ async function handleGreeting(phone, textBody, profileName = null) {
       bodyText,
       headerText: 'Welcome Back',
       btnText: 'Login Now',
-      btnUrl: 'https://election2026sir.in/login',
+      btnUrl: 'https://tnedms.com/login',
       headerUrl: wbAsset.headerUrl,
       headerType: wbAsset.headerType,
     });
@@ -569,7 +569,7 @@ async function handleGreeting(phone, textBody, profileName = null) {
         headerType: wbAsset.headerType,
         headerText: 'Welcome Back',
         btnText: 'Login Now',
-        btnUrl: 'https://election2026sir.in/login',
+        btnUrl: 'https://tnedms.com/login',
       },
     });
   } else {
@@ -734,7 +734,7 @@ async function handleFlowResponse(phone, payload) {
     bodyText: confirmBody,
     headerText: 'Registration Complete',
     btnText: 'Login Now',
-    btnUrl: 'https://election2026sir.in/login',
+    btnUrl: 'https://tnedms.com/login',
     headerUrl: succAsset.headerUrl,
     headerType: succAsset.headerType,
   });
@@ -754,7 +754,7 @@ async function handleFlowResponse(phone, payload) {
       headerType: succAsset.headerType,
       headerText: 'Registration Complete',
       btnText: 'Login Now',
-      btnUrl: 'https://election2026sir.in/login',
+      btnUrl: 'https://tnedms.com/login',
     },
   });
 
@@ -1054,10 +1054,10 @@ async function sendCredentialsTo(phone) {
     { name, username: cleanMobile, passcode });
   const wbAsset = await getFlowAsset('welcome_back_header');
   const res = await sendUrlButtonMessage(phone, {
-    bodyText, headerText: 'Welcome Back', btnText: 'Login Now', btnUrl: 'https://election2026sir.in/login',
+    bodyText, headerText: 'Welcome Back', btnText: 'Login Now', btnUrl: 'https://tnedms.com/login',
     headerUrl: wbAsset.headerUrl, headerType: wbAsset.headerType,
   });
-  await saveCrmMessage({ phone: String(phone).replace(/\D/g, ''), direction: 'outgoing', type: 'interactive', body: bodyText, waMessageId: res?.messages?.[0]?.id, contactName: name, metadata: { action: 'sent_credentials', passcode, username: cleanMobile, headerUrl: wbAsset.headerUrl, headerType: wbAsset.headerType, btnText: 'Login Now', btnUrl: 'https://election2026sir.in/login' } });
+  await saveCrmMessage({ phone: String(phone).replace(/\D/g, ''), direction: 'outgoing', type: 'interactive', body: bodyText, waMessageId: res?.messages?.[0]?.id, contactName: name, metadata: { action: 'sent_credentials', passcode, username: cleanMobile, headerUrl: wbAsset.headerUrl, headerType: wbAsset.headerType, btnText: 'Login Now', btnUrl: 'https://tnedms.com/login' } });
 }
 
 // Send Demo (video + Choose Service CTA), Website (image + URL button), Support (image + Choose Service CTA + phone in body).
@@ -1070,7 +1070,7 @@ async function sendServiceContent(phone, kind) {
   } else if (kind === 'website') {
     const img = await getFlowAsset('svc_website_image');
     const body = await getFlowMessageText('svc_website_text', 'Explore EDMS on our website.');
-    const url = await getFlowMessageText('svc_website_url', 'https://election2026sir.in');
+    const url = await getFlowMessageText('svc_website_url', 'https://tnedms.com');
     const btn = await getFlowMessageText('svc_website_btn', 'Visit Website');
     await sendUrlButtonMessage(phone, { bodyText: body, headerText: img.headerUrl ? undefined : 'EDMS', btnText: btn, btnUrl: url, headerUrl: img.headerUrl, headerType: img.headerUrl ? 'image' : 'text' });
   } else if (kind === 'support') {
@@ -1253,7 +1253,7 @@ async function createServicesPaymentLink({ mobile, name, email, boothCount, user
       reference_id: `wa_${rawMobile}_${Date.now()}`,
       customer: { name: name || 'EDMS Candidate', contact, email: email || (rawMobile ? `${rawMobile}@election2026.in` : undefined) },
       notes: { booth_count: pricing.boothCount, user_id: userId || '', source: 'whatsapp_flow' },
-      callback_url: 'https://election2026sir.in/ward/dashboard?payment=success',
+      callback_url: 'https://tnedms.com/ward/dashboard?payment=success',
       callback_method: 'get',
     }),
     signal: AbortSignal.timeout(15000),

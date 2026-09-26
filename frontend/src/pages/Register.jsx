@@ -611,7 +611,7 @@ export default function Register() {
       {/* Footer */}
       <footer className="reg-site-footer">
         <div className="reg-footer-copy">
-          © 2026 <strong>Election Data Management</strong> — Political Consulting &amp; Election Campaign Management · election2026sir.in
+          © 2026 <strong>Election Data Management</strong> — Political Consulting &amp; Election Campaign Management · tnedms.com
         </div>
         <div className="reg-footer-links">
           <Link to="/terms">{isTa ? 'விதிமுறைகள்' : 'Terms & Conditions'}</Link>

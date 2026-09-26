@@ -239,7 +239,7 @@ export async function createWardOrder(req, res) {
     let paymentLinkUrl = null;
     let paymentLinkId = null;
     try {
-      const origin = req.headers.origin || 'https://election2026sir.in';
+      const origin = req.headers.origin || 'https://tnedms.com';
       const rawMobile = String(mobile || req.user?.mobile || req.user?.username || '').replace(/\D/g, '');
       const formattedContact = rawMobile.length === 10 ? `+91${rawMobile}` : (rawMobile ? `+${rawMobile}` : undefined);
       

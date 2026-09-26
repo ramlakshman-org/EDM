@@ -23,7 +23,7 @@ app.use(helmet({
 }));
 
 // CORS — restrict to the configured client origin (no wildcard fallback).
-const clientOrigin = process.env.CLIENT_ORIGIN || 'https://election2026sir.in';
+const clientOrigin = process.env.CLIENT_ORIGIN || 'https://tnedms.com';
 app.use(cors({ origin: clientOrigin, credentials: true }));
 
 // Capture the raw body so webhook HMAC signatures (Razorpay, Meta) can be

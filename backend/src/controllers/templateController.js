@@ -27,7 +27,7 @@ async function headerHandleFromAsset(db, key) {
 // template was designed around; fall back to the EDM logo which is always
 // reachable. Guards against type mismatch (e.g. an image header + a video asset).
 async function resolveTemplateHeaderMedia(db, name, expectType = 'image') {
-  const DEFAULT = 'https://election2026sir.in/EDM.png';
+  const DEFAULT = 'https://tnedms.com/EDM.png';
   const keyByName = {
     edms_welcome: 'welcome_back_header',
     edms_reg_flow: 'register_header',
@@ -164,8 +164,8 @@ export async function create(req, res) {
 export async function setupDefaults(req, res) {
   try {
     const db = getAppDb();
-    const loginUrl = process.env.PORTAL_LOGIN_URL || 'https://election2026sir.in/login';
-    const registerUrl = process.env.PORTAL_REGISTER_URL || 'https://election2026sir.in/register';
+    const loginUrl = process.env.PORTAL_LOGIN_URL || 'https://tnedms.com/login';
+    const registerUrl = process.env.PORTAL_REGISTER_URL || 'https://tnedms.com/register';
     const results = {};
 
     // Registration template — uses the REAL EDMS register message + its image header.

@@ -170,7 +170,7 @@ const DEFAULT_MESSAGES = {
   svc_benefits_text: '*Why EDMS?*\n\n• Know your voters — booth & ward level\n• Analyse every ward & booth\n• Identify key voter groups\n• Find strong & weak areas\n• Plan your campaign with data\n• Reach the right voters\n\nWin your election with data, not guesswork.',
   svc_faq_text: '*Frequently Asked Questions*\n\n*Q: What is EDMS?*\nA complete election data & campaign platform for Tamil Nadu local body elections.\n\n*Q: How do I register?*\nTap Choose Service → Register and fill the form.\n\n*Q: Is my data secure?*\nYes — access is role-based and encrypted.',
   svc_website_text: 'Explore everything about EDMS on our website.',
-  svc_website_url: 'https://election2026sir.in',
+  svc_website_url: 'https://tnedms.com',
   svc_website_btn: 'Visit Website',
   svc_support_text: 'Need help? Our support team is here for you. Tap below to call us.',
   svc_support_phone: '918106811285',
