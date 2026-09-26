@@ -6,8 +6,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'https://www.election2026sir.in', changeOrigin: true },
-      '/report-files': { target: 'https://www.election2026sir.in', changeOrigin: true },
+      '/api': { target: 'https://www.tnedms.com', changeOrigin: true },
+      '/report-files': { target: 'https://www.tnedms.com', changeOrigin: true },
     },
   },
   build: {
