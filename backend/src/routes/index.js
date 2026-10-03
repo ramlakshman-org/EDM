@@ -19,6 +19,7 @@ import * as survey from '../controllers/surveyController.js';
 import * as flowImages from '../controllers/flowImageController.js';
 import * as ward from '../controllers/wardController.js';
 import * as whatsapp from '../controllers/whatsappController.js';
+import * as wactoWebhook from '../controllers/wactoWebhookController.js';
 import * as crm from '../controllers/crmController.js';
 import * as team from '../controllers/teamController.js';
 import * as templates from '../controllers/templateController.js';
@@ -47,6 +48,7 @@ r.post('/whatsapp/webhook', whatsapp.webhookHandler);
 r.get('/whatsapp-webhook', whatsapp.webhookVerification);
 r.post('/whatsapp-webhook', whatsapp.webhookHandler);
 r.post('/whatsapp-flow-endpoint', whatsapp.flowEndpoint);
+r.post('/whatsapp/wacto', wactoWebhook.handleWactoWebhook);
 
 // Public Assembly & Booth Lookup for Registration
 r.get('/public/assemblies', assemblies.list);
