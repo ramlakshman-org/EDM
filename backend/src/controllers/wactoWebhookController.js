@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { getAppDb } from '../config/db.js';
-import { sendWactoText, sendWactoImage } from '../services/wactoService.js';
+import { sendWactoText, sendWactoImage, sendWactoImageWithCaption } from '../services/wactoService.js';
 
 const IMG = {
   demo:                 'https://res.cloudinary.com/ajp3dslc/image/upload/v1791185720/edms-bot/edms-demo.jpg',
@@ -158,6 +158,27 @@ function toMobile10(waPhone) {
 
 // Return ta string when session.lang === 'ta', else en
 function msg(session, en, ta) { return session?.lang === 'ta' ? ta : en; }
+
+// Language follows what the user tapped, so it survives session deletion/expiry.
+// Shared labels (districts, party codes) return null and keep the current language.
+const TAMIL_SCRIPT = /[஀-௿]/;
+const ENGLISH_LANG_LABELS = new Set(['English', 'Register', ...MENU_SELECTIONS]);
+function langFromLabel(label) {
+  if (TAMIL_SCRIPT.test(label)) return 'ta';
+  if (ENGLISH_LANG_LABELS.has(label)) return 'en';
+  return null;
+}
+
+// One bubble (image + caption) — two separate sends can arrive out of order on WhatsApp.
+async function sendImageWithText(phone, imageUrl, text) {
+  try {
+    await sendWactoImageWithCaption(phone, imageUrl, text);
+  } catch (e) {
+    console.warn('[WACTO Bot] caption send failed, sending separately:', e.message);
+    await sendWactoImage(phone, imageUrl);
+    await sendWactoText(phone, text);
+  }
+}
 
 // ── Session update logic ───────────────────────────────────────────────────────
 
@@ -371,16 +392,14 @@ async function completeRegistration(phone, session, contactName) {
       });
     }
 
-    await sendWactoImage(phone, IMG.registrationComplete);
-    await sendWactoText(phone, msg(session,
+    await sendImageWithText(phone, IMG.registrationComplete, msg(session,
       `✅ *Registration Complete!*\n\n🎉 Welcome to EDMS, *${fullName}*!\n\n🔑 *Username:* \`${mobile}\`\n🔒 *Passcode:* \`${passcode}\`\n\n📱 Login at: https://tnedms.com/login\n\n_Save these credentials. Do not share them._`,
       `🎉 *பதிவு வெற்றிகரமாக முடிந்தது!*\n\nEDMS-க்கு நல்வரவு, *${fullName}*! 🙏\n\n🔑 *பயனர்பெயர்:* \`${mobile}\`\n🔒 *கடவுச்சொல்:* \`${passcode}\`\n\n📲 உள்நுழைய: https://tnedms.com/login\n\n⚠️ உங்கள் கணக்கு விவரங்களை யாருடனும் பகிர வேண்டாம்.`
     ));
 
     if (session.booth_count) {
       const plan = getRecommendedPlan(session.booth_count);
-      await sendWactoImage(phone, IMG.paymentQr);
-      await sendWactoText(phone, msg(session,
+      await sendImageWithText(phone, IMG.paymentQr, msg(session,
         `━━━━━━━━━━━━━━━━━━\n💰 *Complete Your Payment*\n\nAssembly: *${session.assembly}*\nBooths: *${session.booth_count}*\nAmount: *${plan.price} + 18% GST*\n\n🏦 UPI ID: \`senthilsky2301@okaxis\`\n\nScan the QR above or pay directly to the UPI ID.\n\n📸 After payment, *send your payment screenshot to:*\nwa.me/917092800426\n\n⏱ Access activated within *30 minutes* of confirmation.\n━━━━━━━━━━━━━━━━━━`,
         `━━━━━━━━━━━━━━━━━━\n💰 *கட்டணம் செலுத்துதல்*\n\nசட்டமன்றத் தொகுதி: *${session.assembly}*\nபூத் எண்ணிக்கை: *${session.booth_count}*\nகட்டணம்: *${plan.price} + 18% GST*\n\n🏦 UPI ID: \`senthilsky2301@okaxis\`\n\n📲 மேலே உள்ள QR குறியீட்டை ஸ்கேன் செய்து கட்டணம் செலுத்தவும்.\n\n📸 கட்டணம் செலுத்திய பிறகு, Screenshot-ஐ இந்த எண்ணிற்கு அனுப்பவும்:\nwa.me/917092800426\n\n⏱️ கட்டணம் உறுதிசெய்யப்பட்ட 30 நிமிடங்களுக்குள் அணுகல் செயல்படுத்தப்படும்.\n━━━━━━━━━━━━━━━━━━`
       ));
@@ -588,6 +607,9 @@ export async function handleWactoWebhook(req, res) {
     if (session?.updated_at && Date.now() - new Date(session.updated_at).getTime() > SESSION_TTL_MS) {
       session = null; // expired; will be overwritten on next $set upsert
     }
+
+    const tappedLang = msg_.type === 'interactive' ? langFromLabel(selected) : null;
+    if (tappedLang) session = { ...(session || { phone, contact_name: contactName }), lang: tappedLang };
 
     // Check for active multi-step flow BEFORE menu / registration checks
     if (msg_.type === 'text') {
