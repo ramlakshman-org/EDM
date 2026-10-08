@@ -87,7 +87,24 @@ export async function sendWactoTemplate({ mobile, templateName, language = 'en',
  */
 export async function sendWactoText(mobile, text) {
   const to = toWaPhone(mobile);
-  return post('/messages/send-text', { to, text });
+  // WACTO wraps Meta Cloud API format: text must be an object { body: "..." }
+  return post('/messages/send-text', { to, type: 'text', text: { body: text } });
+}
+
+/**
+ * Send an image message (only within a 24-hour user-initiated window).
+ *
+ * @param {string} mobile   — 10-digit mobile
+ * @param {string} imageUrl — public HTTPS URL of the image
+ */
+export async function sendWactoImage(mobile, imageUrl) {
+  const to = toWaPhone(mobile);
+  return post('/messages/send-image', { to, image: { link: imageUrl } });
+}
+
+export async function sendWactoImageWithCaption(mobile, imageUrl, caption) {
+  const to = toWaPhone(mobile);
+  return post('/messages/send-image', { to, image: { link: imageUrl, caption } });
 }
 
 /**
